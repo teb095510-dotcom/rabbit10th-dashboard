@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>好想兔十週年特展 - 商品銷售動態儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root { --blue:#2F5496; --lightblue:#EAF1FB; --warn:#C00000; --bg:#F7F8FA; }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft JhengHei","PingFang TC",Arial,sans-serif; background:var(--bg); margin:0; color:#222; }
+  header { background:var(--blue); color:#fff; padding:18px 28px; }
+  header h1 { margin:0; font-size:22px; }
+  header p { margin:4px 0 0; font-size:13px; opacity:.85; }
+  nav { display:flex; gap:4px; background:#fff; padding:0 20px; border-bottom:2px solid var(--blue); flex-wrap:wrap; }
+  nav button { border:none; background:none; padding:12px 18px; font-size:14px; cursor:pointer; color:#555; border-bottom:3px solid transparent; }
+  nav button.active { color:var(--blue); border-color:var(--blue); font-weight:bold; }
+  section { display:none; padding:20px 28px; max-width:1200px; margin:0 auto; }
+  section.active { display:block; }
+  .card { background:#fff; border-radius:8px; padding:18px 20px; margin-bottom:18px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .controls { display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .controls label { font-size:13px; font-weight:bold; color:#444; margin-right:6px; }
+  select, input[type=date], input[type=text] { padding:6px 10px; border:1px solid #ccc; border-radius:5px; font-size:13px; }
+  .mode-btns button { padding:6px 14px; border:1px solid var(--blue); background:#fff; color:var(--blue); border-radius:5px; cursor:pointer; font-size:13px; margin-right:4px; }
+  .mode-btns button.active { background:var(--blue); color:#fff; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { padding:6px 10px; text-align:right; border-bottom:1px solid #eee; }
+  th:first-child, td:first-child { text-align:left; }
+  th { background:var(--lightblue); color:var(--blue); position:sticky; top:0; }
+  tbody tr:hover { background:#f5f9ff; }
+  tbody tr.closed-row { background:#F3EEFA; }
+  tbody tr.closed-row:hover { background:#EBE2F7; }
+  .num { font-variant-numeric: tabular-nums; }
+  .warn-box { background:#FDEDED; border-left:4px solid var(--warn); padding:14px 16px; border-radius:4px; font-size:13px; line-height:1.7; }
+  .info-box { background:#F3EEFA; border-left:4px solid #8E7CC3; padding:14px 16px; border-radius:4px; font-size:13px; line-height:1.7; }
+  .kpi-row { display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .kpi { flex:1; min-width:150px; background:#fff; border-radius:8px; padding:14px 18px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .kpi .label { font-size:12px; color:#888; }
+  .kpi .value { font-size:22px; font-weight:bold; color:var(--blue); margin-top:4px; }
+  canvas { width:100%; max-width:100%; cursor:crosshair; }
+  .bar { height:22px; background:var(--blue); border-radius:3px; }
+  .bar-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:13px; }
+  .bar-row .name { width:220px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar-row .track { flex:1; background:#eee; border-radius:3px; overflow:hidden; }
+  .bar-row .val { width:90px; text-align:right; flex-shrink:0; }
+  .scroll-table { max-height:480px; overflow:auto; border:1px solid #eee; border-radius:6px; }
+  .legend-note { font-size:12px; color:#777; margin:6px 0 10px; }
+  .legend-note .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 4px 0 12px; vertical-align:middle; }
+  #chartTooltip { position:fixed; display:none; background:rgba(30,30,30,.92); color:#fff; font-size:12px; padding:8px 10px; border-radius:6px; pointer-events:none; z-index:9999; line-height:1.6; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.25); }
+  .suggest-wrap { position:relative; }
+  .suggest-box { position:absolute; top:100%; left:0; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.12); width:280px; max-height:220px; overflow:auto; z-index:50; display:none; margin-top:2px; }
+  .suggest-box div { padding:7px 12px; font-size:13px; cursor:pointer; }
+  .suggest-box div:hover { background:var(--lightblue); }
+  .suggest-box .empty { color:#999; cursor:default; }
+  .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; margin-left:6px; }
+  .badge.new { background:#FCE4D6; color:#C00000; }
+  .badge.old { background:#eee; color:#666; }
+  .loading-box { text-align:center; padding:60px 20px; color:#999; }
+  .spinner { display:inline-block; width:30px; height:30px; border:3px solid #eee; border-top-color:var(--blue); border-radius:50%; animation:spin .7s linear infinite; margin-bottom:12px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .msg-err { background:#fff0f0; border:1px solid #f5c6c6; color:#C00000; padding:14px 16px; border-radius:6px; font-size:13px; text-align:left; max-width:520px; margin:0 auto; line-height:1.7; }
+  .retry-btn { margin-top:14px; padding:8px 20px; border:none; border-radius:6px; background:var(--blue); color:#fff; cursor:pointer; font-size:13px; }
+  #appRoot { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>好想兔十週年特展 - 商品銷售動態儀表板</h1>
+  <p id="headerSub">資料載入中…</p>
+</header>
+
+<div id="loadingBox" class="loading-box">
+  <div class="spinner"></div>
+  <p>正在從 Google 試算表載入最新銷售資料…</p>
+</div>
+
+<div id="appRoot">
+<nav id="tabs">
+  <button data-tab="trend" class="active">商品趨勢</button>
+  <button data-tab="rank">銷售排行</button>
+  <button data-tab="overview">每日總覽</button>
+  <button data-tab="vendor">廠商別分析</button>
+  <button data-tab="returns">退貨分析</button>
+  <button data-tab="quality">資料品質</button>
+</nav>
+
+<div id="chartTooltip"></div>
+
+<section id="trend" class="active">
+  <div class="card">
+    <div class="controls">
+      <div><label>選擇方式</label>
+        <select id="modeSelect">
+          <option value="all">① 全部商品</option>
+          <option value="vendor">② 依廠商(加總)</option>
+          <option value="vendorItem">③ 依廠商→單一品項</option>
+          <option value="newold">④ 依新舊品</option>
+          <option value="keyword">⑤ 關鍵字搜尋</option>
+        </select>
+      </div>
+      <div id="vendorCtrl" style="display:none"><label>廠商</label><select id="vendorSelect"></select></div>
+      <div id="vendorItemCtrl" style="display:none"><label>商品</label><select id="vendorItemSelect"></select></div>
+      <div id="newoldCtrl" style="display:none"><label>新舊品</label>
+        <select id="newoldSelect"><option value="全部">全部</option><option value="新品">新品</option><option value="舊品">舊品</option></select>
+      </div>
+      <div id="keywordCtrl" style="display:none" class="suggest-wrap">
+        <label>關鍵字</label><input type="text" id="keywordInput" placeholder="輸入商品名稱片段" autocomplete="off">
+        <div id="keywordSuggest" class="suggest-box"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="mode-btns" id="periodBtns">
+        <button data-mode="day">單日</button>
+        <button data-mode="week">單週</button>
+        <button data-mode="range" class="active">自訂區間</button>
+      </div>
+      <div><label>起始日期</label><input type="date" id="startDate"></div>
+      <div><label>結束日期</label><input type="date" id="endDate"></div>
+    </div>
+    <div class="kpi-row" id="trendKpis"></div>
+    <div class="legend-note">日期標籤含星期與台灣國定假日(依人事行政總處115年辦公日曆表)<span class="swatch" style="background:#f2f2f2;border:1px solid #ddd;"></span>週末<span class="swatch" style="background:#fce4d6;"></span>國定假日<span class="swatch" style="background:#D9D2E9;"></span>未營業日 ｜ 滑鼠移到折線上可查看該日數值 ｜ 新品定義：近14天內首次出現(目前新品<span id="nNewSpan">-</span>項/舊品<span id="nOldSpan">-</span>項)</div>
+    <canvas id="trendChartQty" height="110"></canvas>
+    <canvas id="trendChartRev" height="110" style="margin-top:20px;"></canvas>
+  </div>
+</section>
+
+<section id="rank">
+  <div class="card">
+    <div class="controls">
+      <div><label>起始日期</label><input type="date" id="rankStart"></div>
+      <div><label>結束日期</label><input type="date" id="rankEnd"></div>
+      <div class="mode-btns" id="rankModeBtns">
+        <button data-rankmode="rev" class="active">銷售額排行</button>
+        <button data-rankmode="qty">銷售數量排行</button>
+      </div>
+    </div>
+    <div id="rankBars"></div>
+    <div class="scroll-table" style="margin-top:16px;">
+      <table id="rankTable"><thead><tr><th>排名</th><th>商品名稱</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+
+<section id="overview">
+  <div class="card">
+    <canvas id="overviewChart" height="100"></canvas>
+    <div class="scroll-table" style="margin-top:16px;">
+      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+
+<section id="vendor">
+  <div class="card">
+    <div id="vendorBars"></div>
+  </div>
+</section>
+
+<section id="returns">
+  <div class="card">
+    <div class="scroll-table">
+      <table id="returnsTable"><thead><tr><th>商品名稱</th><th>銷售數量</th><th>退回數量</th><th>退貨率</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+
+<section id="quality">
+  <div class="card">
+    <div class="info-box">
+      <b>未營業日判定規則：</b>展期日曆自資料最早一天起算至目前最新資料日。凡符合以下任一條件的日期，一律視為「未營業日」，數值以0呈現(非資料缺口)：
+      ① 資料夾內完全沒有該日期的商品銷售總表檔案；② 該日期的檔案存在，但內容僅有表頭與總計列、無任何商品明細(即當日無銷售紀錄)。
+      此規則已套用於「商品趨勢」與「每日總覽」的日期軸，未營業日以淺紫色標示，不會被誤判為資料矛盾或缺口。目前共 <span id="nClosedSpan">-</span> 天未營業，詳見下方清單。
+      <br><br><b>新舊品分類說明：</b>原始報表「類別」欄位僅零星3個SKU標註「新品」，樣本過少無法作為全部商品分類依據，因此改採「商品首次出現日期」推算：距最新資料日 14 天內首次出現＝新品，否則＝舊品，會隨資料更新自動調整。
+      <br><br><b>資料來源：</b>本頁資料即時讀取自 Google 試算表，試算表內以 IMPORTDATA() 公式直接連結 Google Drive 上「動態分析儀表板」資料夾內的 master_daily.csv 與 business_calendar.csv(本機整併腳本產生後透過雲端硬碟同步上傳)，Google 試算表會自動定期重新抓取，全程無需手動操作，此頁面每次開啟也會自動顯示當下最新內容。
+    </div>
+    <h3 style="margin-top:20px;">未營業日清單</h3>
+    <div class="scroll-table">
+      <table id="closedTable"><thead><tr><th>日期</th><th>星期</th><th>原因</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+const SHEET_ID = "11v37Uer1fjDoDNe6bS6jubdpIpt_VZCKoW4l3R9q3yk";
+const XLSX_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/export?format=xlsx";
+const TW_HOLIDAYS = {"2026-01-01": "元旦", "2026-02-27": "和平紀念日(補假)", "2026-04-04": "兒童節", "2026-04-05": "清明節", "2026-05-01": "勞動節", "2026-06-19": "端午節", "2026-09-25": "中秋節", "2026-09-28": "教師節", "2026-10-09": "國慶日(補假)", "2026-10-26": "光復節(補假)", "2026-12-25": "行憲紀念日"};
+const WEEKDAY_NAMES = ["日","一","二","三","四","五","六"];
+
+let RECORDS = [];
+let CALENDAR = {};
+let CLOSED_DAYS = [];
+let DATE_MIN = "", DATE_MAX = "";
+
+function fmtNum(n){ return Math.round(n).toLocaleString('zh-Hant'); }
+function fmtPct(n){ return (n*100).toFixed(1)+'%'; }
+
+function xlDate(v){
+  if (v==null) return null;
+  if (typeof v === 'number') {
+    const ms = Math.round((v-25569)*86400000);
+    const d = new Date(ms);
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+  }
+  if (typeof v === 'string') {
+    const m = v.match(/\d{4}-\d{2}-\d{2}/);
+    return m ? m[0] : null;
+  }
+  return null;
+}
+function num(v){ return typeof v === 'number' ? v : (parseFloat(v)||0); }
+
+async function loadData(){
+  try {
+    const res = await fetch(XLSX_URL, { cache:'no-cache' });
+    if(!res.ok) throw new Error('HTTP '+res.status+' — 請確認 Google 試算表已設為「知道連結的人可以檢視」');
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buf), { type:'array', raw:true, cellDates:false });
+
+    // 這兩個分頁預期由 IMPORTDATA() 公式自動從 Google Drive 上的 master_daily.csv /
+    // business_calendar.csv 即時匯入(見「資料品質」分頁的設定說明)，欄位順序需與這兩個 CSV 的原始欄位一致。
+    const wsMain = wb.Sheets['原始彙整'];
+    const wsCal = wb.Sheets['營業日曆'];
+    if(!wsMain || !wsCal) throw new Error('試算表中找不到「原始彙整」或「營業日曆」工作表，請確認已依說明設定 IMPORTDATA 公式');
+
+    // master_daily.csv 欄位: 日期,日期區間(若為推算合併值),資料狀態,廠商,SKU,商品名稱,售價,銷售數量,退回數量,淨銷售數量,售額總計
+    const mainRows = XLSX.utils.sheet_to_json(wsMain, { header:1, defval:null, raw:true });
+    RECORDS = [];
+    for(let i=1;i<mainRows.length;i++){
+      const r = mainRows[i];
+      if(!r || r[0]==null) continue;
+      const d = xlDate(r[0]);
+      if(!d) continue;
+      RECORDS.push({ d, v:r[3], p:r[5], q:num(r[7]), rt:num(r[8]), n:num(r[9]), rev:num(r[10]) });
+    }
+    if(RECORDS.length === 0) throw new Error('試算表「原始彙整」中未找到交易資料，請確認 IMPORTDATA 公式是否已成功載入資料');
+
+    // 新舊品分類改在前端即時計算(距最新資料日14天內首次出現=新品)，不再依賴後端預先計算的欄位
+    const maxDateStr = RECORDS.reduce((m,r)=> r.d>m? r.d : m, RECORDS[0].d);
+    const maxDateMs = new Date(maxDateStr+'T00:00:00').getTime();
+    const firstSeen = {};
+    RECORDS.forEach(r=>{ if(!firstSeen[r.p] || r.d<firstSeen[r.p]) firstSeen[r.p]=r.d; });
+    const newOldMap = {};
+    Object.keys(firstSeen).forEach(p=>{
+      const ageDays = Math.round((maxDateMs - new Date(firstSeen[p]+'T00:00:00').getTime())/86400000);
+      newOldMap[p] = ageDays <= 14 ? '新品' : '舊品';
+    });
+    RECORDS.forEach(r=>{ r.no = newOldMap[r.p] || '舊品'; });
+
+    // business_calendar.csv 欄位: 日期,星期,是否營業,備註,商品筆數,淨銷售數量,淨銷售額
+    const calRows = XLSX.utils.sheet_to_json(wsCal, { header:1, defval:null, raw:true });
+    CALENDAR = {}; CLOSED_DAYS = [];
+    for(let i=1;i<calRows.length;i++){
+      const r = calRows[i];
+      if(!r || r[0]==null) continue;
+      const d = xlDate(r[0]);
+      if(!d) continue;
+      const status = r[2] || '營業';
+      const note = r[3] || '';
+      CALENDAR[d] = { status, note };
+      if(status === '未營業') CLOSED_DAYS.push({ d, wd:r[1]||'', note });
+    }
+
+    const calDates = Object.keys(CALENDAR).sort();
+    DATE_MIN = calDates[0]; DATE_MAX = calDates[calDates.length-1];
+
+    document.getElementById('loadingBox').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+    document.getElementById('headerSub').textContent = '資料範圍：'+DATE_MIN+' ~ '+DATE_MAX+' ｜ 載入時間：'+new Date().toLocaleString('zh-Hant');
+
+    initDashboard();
+  } catch(err) {
+    document.getElementById('loadingBox').innerHTML =
+      '<div class="msg-err">❌ 資料載入失敗：'+err.message+'</div>'+
+      '<button class="retry-btn" onclick="location.reload()">🔄 重新載入</button>';
+  }
+}
+
+function getDayInfo(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const dow = d.getDay();
+  const wd = WEEKDAY_NAMES[dow];
+  const holiday = TW_HOLIDAYS[dateStr];
+  let label = '', isOff = false;
+  if(holiday){ label = holiday; isOff = true; }
+  else if(dow===0 || dow===6){ label = '週末'; isOff = true; }
+  const mmdd = dateStr.slice(5).replace('-','/');
+  let combined = mmdd + '(' + wd + ')' + (label? ' '+label : '');
+  const cal = CALENDAR[dateStr];
+  const isClosed = !!(cal && cal.status === '未營業');
+  const closedNote = isClosed ? cal.note : '';
+  if(isClosed) combined += ' [未營業]';
+  return {wd, label, isOff, combined, isClosed, closedNote};
+}
+
+function initDashboard(){
+  // tabs
+  document.querySelectorAll('#tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  const products = Array.from(new Set(RECORDS.map(r=>r.p))).sort();
+  const vendors = Array.from(new Set(RECORDS.map(r=>r.v))).sort();
+  const vendorProducts = {};
+  vendors.forEach(v=>{ vendorProducts[v] = Array.from(new Set(RECORDS.filter(r=>r.v===v).map(r=>r.p))).sort(); });
+
+  const n_new = RECORDS.reduce((set,r)=>{ if(r.no==='新品') set.add(r.p); return set; }, new Set()).size;
+  const n_old = products.length - n_new;
+  document.getElementById('nNewSpan').textContent = n_new;
+  document.getElementById('nOldSpan').textContent = n_old;
+  document.getElementById('nClosedSpan').textContent = CLOSED_DAYS.length;
+
+  const allDates = Object.keys(CALENDAR).sort();
+
+  function addDays(dateStr, n){
+    const d = new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+n);
+    return d.toISOString().slice(0,10);
+  }
+
+  const modeSelect = document.getElementById('modeSelect');
+  const vendorSelect = document.getElementById('vendorSelect');
+  const vendorItemSelect = document.getElementById('vendorItemSelect');
+  const newoldSelect = document.getElementById('newoldSelect');
+  const keywordInput = document.getElementById('keywordInput');
+  const keywordSuggest = document.getElementById('keywordSuggest');
+  let exactKeywordProduct = null;
+
+  vendorSelect.innerHTML = vendors.map(v=>`<option value="${v}">${v}</option>`).join('');
+  function refreshVendorItems(){
+    const v = vendorSelect.value;
+    vendorItemSelect.innerHTML = (vendorProducts[v]||[]).map(p=>`<option value="${p}">${p}</option>`).join('');
+  }
+  refreshVendorItems();
+
+  function updateModeVisibility(){
+    const m = modeSelect.value;
+    document.getElementById('vendorCtrl').style.display = (m==='vendor'||m==='vendorItem') ? 'flex' : 'none';
+    document.getElementById('vendorItemCtrl').style.display = (m==='vendorItem') ? 'flex' : 'none';
+    document.getElementById('newoldCtrl').style.display = (m==='newold') ? 'flex' : 'none';
+    document.getElementById('keywordCtrl').style.display = (m==='keyword') ? 'flex' : 'none';
+  }
+  modeSelect.addEventListener('change', ()=>{ updateModeVisibility(); renderTrend(); });
+  vendorSelect.addEventListener('change', ()=>{ refreshVendorItems(); renderTrend(); });
+  vendorItemSelect.addEventListener('change', renderTrend);
+  newoldSelect.addEventListener('change', renderTrend);
+
+  keywordInput.addEventListener('input', ()=>{
+    exactKeywordProduct = null;
+    const kw = keywordInput.value.trim();
+    if(!kw){ keywordSuggest.style.display='none'; renderTrend(); return; }
+    const matches = products.filter(p=>p.includes(kw)).slice(0,10);
+    if(matches.length===0){
+      keywordSuggest.innerHTML = '<div class="empty">沒有符合的商品</div>';
+    } else {
+      keywordSuggest.innerHTML = matches.map(p=>`<div data-p="${p.replace(/"/g,'&quot;')}">${p}</div>`).join('');
+    }
+    keywordSuggest.style.display = 'block';
+    renderTrend();
+  });
+  keywordSuggest.addEventListener('click', (e)=>{
+    const p = e.target.getAttribute('data-p');
+    if(!p) return;
+    keywordInput.value = p;
+    exactKeywordProduct = p;
+    keywordSuggest.style.display = 'none';
+    renderTrend();
+  });
+  document.addEventListener('click', (e)=>{
+    if(!keywordSuggest.contains(e.target) && e.target!==keywordInput) keywordSuggest.style.display='none';
+  });
+  updateModeVisibility();
+
+  function recordMatches(r){
+    const m = modeSelect.value;
+    if(m==='all') return true;
+    if(m==='vendor') return r.v === vendorSelect.value;
+    if(m==='vendorItem') return r.p === vendorItemSelect.value;
+    if(m==='newold') return newoldSelect.value==='全部' || r.no === newoldSelect.value;
+    if(m==='keyword'){
+      if(exactKeywordProduct) return r.p === exactKeywordProduct;
+      const kw = keywordInput.value.trim();
+      if(!kw) return true;
+      return r.p.includes(kw);
+    }
+    return true;
+  }
+
+  const tooltipEl = document.getElementById('chartTooltip');
+  function showTooltip(clientX, clientY, html){
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.display = 'block';
+    const pad = 14;
+    let x = clientX + pad, y = clientY + pad;
+    const rect = tooltipEl.getBoundingClientRect();
+    if(x + rect.width > window.innerWidth) x = clientX - rect.width - pad;
+    if(y + rect.height > window.innerHeight) y = clientY - rect.height - pad;
+    tooltipEl.style.left = x + 'px';
+    tooltipEl.style.top = y + 'px';
+  }
+  function hideTooltip(){ tooltipEl.style.display = 'none'; }
+
+  function drawLineChart(canvas, labels, series, opts){
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth || 800;
+    const cssH = parseInt(canvas.getAttribute('height')) || 90;
+    canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+    const padL=55, padR=20, padT=24, padB=34;
+    const w = cssW-padL-padR, h = cssH-padT-padB;
+    const vals = series.flatMap(s=>s.data.filter(v=>v!==null));
+    const maxV = Math.max(1, ...vals);
+    const n = labels.length;
+    const xOf = (i)=> padL + (n<=1?0:w*i/(n-1));
+
+    ctx.fillStyle = '#333'; ctx.font = '12px sans-serif';
+    ctx.fillText(opts.title || '', padL, 14);
+
+    const dayInfos = labels.map(getDayInfo);
+    dayInfos.forEach((info,i)=>{
+      if(!info.isOff && !info.isClosed) return;
+      const bandW = n<=1? w : w/(n-1);
+      const x0 = xOf(i) - bandW/2;
+      ctx.fillStyle = info.isClosed ? 'rgba(217,210,233,.7)' : (info.label!=='週末' ? 'rgba(252,228,214,.6)' : 'rgba(0,0,0,.045)');
+      ctx.fillRect(Math.max(padL,x0), padT, Math.min(bandW, padL+w-Math.max(padL,x0)), h);
+    });
+
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth=1;
+    for(let i=0;i<=4;i++){
+      const y = padT + h - (h*i/4);
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+w,y); ctx.stroke();
+      ctx.fillStyle='#999'; ctx.font='10px sans-serif';
+      ctx.fillText(fmtNum(maxV*i/4), 2, y+3);
+    }
+
+    const points = series.map(s=>[]);
+    series.forEach((s,si)=>{
+      ctx.strokeStyle = s.color; ctx.lineWidth=2; ctx.beginPath();
+      let started=false;
+      s.data.forEach((v,i)=>{
+        const x = xOf(i);
+        if(v===null){ points[si].push(null); started=false; return; }
+        const y = padT + h - (h*v/maxV);
+        points[si].push([x,y]);
+        if(!started){ ctx.moveTo(x,y); started=true; } else { ctx.lineTo(x,y); }
+      });
+      ctx.stroke();
+      points[si].forEach(p=>{
+        if(!p) return;
+        ctx.fillStyle = s.color;
+        ctx.beginPath(); ctx.arc(p[0],p[1],2.2,0,Math.PI*2); ctx.fill();
+      });
+    });
+
+    ctx.font='10px sans-serif';
+    const step = Math.max(1, Math.ceil(n/8));
+    labels.forEach((lb,i)=>{
+      if(i%step!==0 && i!==n-1) return;
+      const info = dayInfos[i];
+      const x = xOf(i);
+      ctx.fillStyle = info.isClosed ? '#6A4C93' : (info.isOff ? (info.label!=='週末' ? '#C00000' : '#777') : '#999');
+      ctx.fillText(info.combined, x-20, cssH-8);
+    });
+
+    canvas._chartState = {labels, series, dayInfos, padL, padR, padT, padB, w, h, cssW, cssH, maxV, n, xOf};
+
+    if(!canvas.dataset.hoverBound){
+      canvas.dataset.hoverBound = '1';
+      canvas.addEventListener('mousemove', (e)=>{
+        const st = canvas._chartState;
+        if(!st || st.n===0) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        if(mx < st.padL || mx > st.padL+st.w){ hideTooltip(); return; }
+        let idx = st.n<=1? 0 : Math.round((mx-st.padL)/st.w*(st.n-1));
+        idx = Math.max(0, Math.min(st.n-1, idx));
+        const info = st.dayInfos[idx];
+        let html = '<b>'+info.combined+'</b>';
+        if(info.isClosed) html += '<br><span style="color:#D9D2E9">('+ (info.closedNote||'未營業') +')</span>';
+        st.series.forEach(s=>{
+          const v = s.data[idx];
+          html += '<br>' + (s.label||'數值') + '：' + (v===null? '-' : fmtNum(v));
+        });
+        showTooltip(e.clientX, e.clientY, html);
+      });
+      canvas.addEventListener('mouseleave', hideTooltip);
+    }
+  }
+
+  let periodMode = 'range';
+  document.querySelectorAll('#periodBtns button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#periodBtns button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      periodMode = btn.dataset.mode;
+      syncTrendDates();
+      renderTrend();
+    });
+  });
+  document.getElementById('startDate').value = DATE_MIN;
+  document.getElementById('endDate').value = DATE_MAX;
+  function syncTrendDates(){
+    const start = document.getElementById('startDate').value;
+    const endInput = document.getElementById('endDate');
+    if(periodMode==='day'){ endInput.value = start; endInput.disabled = true; }
+    else if(periodMode==='week'){ endInput.value = addDays(start,6); endInput.disabled = true; }
+    else { endInput.disabled = false; }
+  }
+  document.getElementById('startDate').addEventListener('change', ()=>{ syncTrendDates(); renderTrend(); });
+  document.getElementById('endDate').addEventListener('change', renderTrend);
+
+  function renderTrend(){
+    const start = document.getElementById('startDate').value;
+    const end = document.getElementById('endDate').value;
+    const dates = allDates.filter(d=> d>=start && d<=end);
+    const qtyByDate = {}, revByDate = {};
+    dates.forEach(d=>{ qtyByDate[d]=0; revByDate[d]=0; });
+    RECORDS.forEach(r=>{
+      if(r.d<start || r.d>end) return;
+      if(!recordMatches(r)) return;
+      qtyByDate[r.d] = (qtyByDate[r.d]||0) + r.n;
+      revByDate[r.d] = (revByDate[r.d]||0) + r.rev;
+    });
+    const qtyData = dates.map(d=>qtyByDate[d]);
+    const revData = dates.map(d=>revByDate[d]);
+    drawLineChart(document.getElementById('trendChartQty'), dates, [{data:qtyData,color:'#2F5496',label:'銷售數量'}], {title:'銷售數量趨勢'});
+    drawLineChart(document.getElementById('trendChartRev'), dates, [{data:revData,color:'#C00000',label:'銷售額'}], {title:'銷售額趨勢'});
+
+    const totQty = qtyData.reduce((a,b)=>a+b,0);
+    const totRev = revData.reduce((a,b)=>a+b,0);
+    document.getElementById('trendKpis').innerHTML = `
+      <div class="kpi"><div class="label">選定期間天數</div><div class="value">${dates.length}</div></div>
+      <div class="kpi"><div class="label">總銷售數量</div><div class="value">${fmtNum(totQty)}</div></div>
+      <div class="kpi"><div class="label">總銷售額</div><div class="value">$${fmtNum(totRev)}</div></div>
+    `;
+  }
+  syncTrendDates();
+  renderTrend();
+
+  let rankMode = 'rev';
+  document.querySelectorAll('#rankModeBtns button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#rankModeBtns button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      rankMode = btn.dataset.rankmode;
+      renderRank();
+    });
+  });
+  document.getElementById('rankStart').value = DATE_MIN;
+  document.getElementById('rankEnd').value = DATE_MAX;
+  document.getElementById('rankStart').addEventListener('change', renderRank);
+  document.getElementById('rankEnd').addEventListener('change', renderRank);
+  function renderRank(){
+    const start = document.getElementById('rankStart').value;
+    const end = document.getElementById('rankEnd').value;
+    const agg = {};
+    RECORDS.forEach(r=>{
+      if(r.d<start || r.d>end) return;
+      if(!agg[r.p]) agg[r.p] = {qty:0, rev:0};
+      agg[r.p].qty += r.n; agg[r.p].rev += r.rev;
+    });
+    const key = rankMode==='qty' ? 'qty' : 'rev';
+    const arr = Object.entries(agg).map(([p,v])=>({p,...v})).sort((a,b)=>b[key]-a[key]).slice(0,20);
+    const maxVal = arr.length? arr[0][key] : 1;
+    document.getElementById('rankBars').innerHTML = arr.slice(0,10).map(x=>`
+      <div class="bar-row"><div class="name" title="${x.p}">${x.p}</div>
+      <div class="track"><div class="bar" style="width:${Math.max(2,x[key]/maxVal*100)}%"></div></div>
+      <div class="val">${key==='rev'?'$':''}${fmtNum(x[key])}</div></div>`).join('');
+    const tbody = document.querySelector('#rankTable tbody');
+    tbody.innerHTML = arr.map((x,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${x.p}</td><td class="num">$${fmtNum(x.rev)}</td><td class="num">${fmtNum(x.qty)}</td></tr>`).join('');
+  }
+  renderRank();
+
+  function renderOverview(){
+    const byDate = {};
+    allDates.forEach(d=>byDate[d]={rev:0,qty:0,products:new Set()});
+    RECORDS.forEach(r=>{
+      byDate[r.d].rev += r.rev; byDate[r.d].qty += r.n;
+      if(r.n>0) byDate[r.d].products.add(r.p);
+    });
+    const rows = allDates.map(d=>({d, rev:byDate[d].rev, qty:byDate[d].qty, cnt:byDate[d].products.size}));
+    drawLineChart(document.getElementById('overviewChart'), rows.map(r=>r.d), [{data:rows.map(r=>r.rev), color:'#2F5496', label:'銷售額'}], {title:'每日銷售額趨勢'});
+    const tbody = document.querySelector('#overviewTable tbody');
+    tbody.innerHTML = rows.map((r,i)=>{
+      const prev = i>0? rows[i-1].rev : null;
+      const growth = (prev && prev!==0)? (r.rev-prev)/prev : null;
+      const info = getDayInfo(r.d);
+      const cls = info.isClosed ? ' class="closed-row"' : '';
+      const statusLabel = info.isClosed ? (info.closedNote || '未營業') : '營業';
+      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${statusLabel}</td></tr>`;
+    }).join('');
+  }
+  renderOverview();
+
+  function renderVendor(){
+    const agg = {};
+    RECORDS.forEach(r=>{ if(!agg[r.v]) agg[r.v]={rev:0,qty:0}; agg[r.v].rev+=r.rev; agg[r.v].qty+=r.n; });
+    const arr = Object.entries(agg).map(([v,x])=>({v,...x})).sort((a,b)=>b.rev-a.rev);
+    const total = arr.reduce((a,b)=>a+b.rev,0);
+    const maxRev = arr.length? arr[0].rev:1;
+    document.getElementById('vendorBars').innerHTML = arr.map(x=>`
+      <div class="bar-row"><div class="name" title="${x.v}">${x.v}</div>
+      <div class="track"><div class="bar" style="width:${Math.max(2,x.rev/maxRev*100)}%"></div></div>
+      <div class="val">$${fmtNum(x.rev)} (${fmtPct(x.rev/total)})</div></div>`).join('');
+  }
+  renderVendor();
+
+  function renderReturns(){
+    const agg = {};
+    RECORDS.forEach(r=>{ if(!agg[r.p]) agg[r.p]={qty:0,rt:0}; agg[r.p].qty+=r.q; agg[r.p].rt+=r.rt; });
+    const arr = Object.entries(agg).map(([p,x])=>({p, qty:x.qty, rt:x.rt, rate: x.qty? x.rt/x.qty : 0})).sort((a,b)=>b.rate-a.rate);
+    const tbody = document.querySelector('#returnsTable tbody');
+    tbody.innerHTML = arr.map(x=>{
+      const bg = x.rate>0 ? `rgba(248,105,107,${Math.min(1,x.rate*2).toFixed(2)})` : 'transparent';
+      return `<tr><td style="text-align:left">${x.p}</td><td class="num">${fmtNum(x.qty)}</td><td class="num">${fmtNum(x.rt)}</td><td class="num" style="background:${bg}">${x.qty? fmtPct(x.rate):'-'}</td></tr>`;
+    }).join('');
+  }
+  renderReturns();
+
+  document.querySelector('#closedTable tbody').innerHTML = CLOSED_DAYS.map(c=>
+    `<tr><td style="text-align:left">${c.d}</td><td>${c.wd}</td><td style="text-align:left">${c.note}</td></tr>`
+  ).join('');
+
+  window.addEventListener('resize', ()=>{ renderTrend(); renderOverview(); });
+}
+
+window.addEventListener('load', loadData);
+</script>
+</body>
+</html>
