@@ -43,6 +43,12 @@
   .bar-row .name { width:220px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bar-row .track { flex:1; background:#eee; border-radius:3px; overflow:hidden; }
   .bar-row .val { width:90px; text-align:right; flex-shrink:0; }
+  .vendor-split-row { display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:11px; color:#777; }
+  .vendor-split-row .name { width:220px; flex-shrink:0; }
+  .split-track { flex:1; height:7px; background:#eee; border-radius:3px; overflow:hidden; display:flex; }
+  .split-new { background:#E8A33D; height:100%; }
+  .split-old { background:#B7B7B7; height:100%; }
+  .split-val { width:170px; text-align:right; flex-shrink:0; }
   .scroll-table { max-height:480px; overflow:auto; border:1px solid #eee; border-radius:6px; }
   .legend-note { font-size:12px; color:#777; margin:6px 0 10px; }
   .legend-note .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 4px 0 12px; vertical-align:middle; }
@@ -152,6 +158,7 @@
 
 <section id="vendor">
   <div class="card">
+    <div class="legend-note"><span class="swatch" style="background:#E8A33D;"></span>新品<span class="swatch" style="background:#B7B7B7;"></span>舊品 ｜ 依銷售額佔比。新舊品分類來源：商品總表 (A/B) 權威分類，若商品未列於總表則以「近14天內首次出現＝新品」推算</div>
     <div id="vendorBars"></div>
   </div>
 </section>
@@ -170,7 +177,7 @@
       <b>未營業日判定規則：</b>展期日曆自資料最早一天起算至目前最新資料日。凡符合以下任一條件的日期，一律視為「未營業日」，數值以0呈現(非資料缺口)：
       ① 資料夾內完全沒有該日期的商品銷售總表檔案；② 該日期的檔案存在，但內容僅有表頭與總計列、無任何商品明細(即當日無銷售紀錄)。
       此規則已套用於「商品趨勢」與「每日總覽」的日期軸，未營業日以淺紫色標示，不會被誤判為資料矛盾或缺口。目前共 <span id="nClosedSpan">-</span> 天未營業，詳見下方清單。
-      <br><br><b>新舊品分類說明：</b>原始報表「類別」欄位僅零星3個SKU標註「新品」，樣本過少無法作為全部商品分類依據，因此改採「商品首次出現日期」推算：距最新資料日 14 天內首次出現＝新品，否則＝舊品，會隨資料更新自動調整。
+      <br><br><b>新舊品分類說明：</b>優先採用「2026-駁二十周年-營運大表」商品總表的權威分類(G欄，A=新品/B=舊品)，透過 Google 試算表 IMPORTRANGE 公式即時同步至本試算表「商品分類」分頁，商品總表更新後會自動反映。若商品未列於商品總表(例如票券、新上架SKU)，則 fallback 採「商品首次出現日期」推算：距最新資料日 14 天內首次出現＝新品，否則＝舊品。
       <br><br><b>資料來源：</b>本頁資料即時讀取自 Google 試算表，試算表內以 IMPORTDATA() 公式直接連結 Google Drive 上「動態分析儀表板」資料夾內的 master_daily.csv 與 business_calendar.csv(本機整併腳本產生後透過雲端硬碟同步上傳)，Google 試算表會自動定期重新抓取，全程無需手動操作，此頁面每次開啟也會自動顯示當下最新內容。
     </div>
     <h3 style="margin-top:20px;">未營業日清單</h3>
@@ -221,6 +228,7 @@ async function loadData(){
     // business_calendar.csv 即時匯入(見「資料品質」分頁的設定說明)，欄位順序需與這兩個 CSV 的原始欄位一致。
     const wsMain = wb.Sheets['原始彙整'];
     const wsCal = wb.Sheets['營業日曆'];
+    const wsClass = wb.Sheets['商品分類'];
     if(!wsMain || !wsCal) throw new Error('試算表中找不到「原始彙整」或「營業日曆」工作表，請確認已依說明設定 IMPORTDATA 公式');
 
     // master_daily.csv 欄位: 日期,日期區間(若為推算合併值),資料狀態,廠商,SKU,商品名稱,售價,銷售數量,退回數量,淨銷售數量,售額總計
@@ -235,13 +243,33 @@ async function loadData(){
     }
     if(RECORDS.length === 0) throw new Error('試算表「原始彙整」中未找到交易資料，請確認 IMPORTDATA 公式是否已成功載入資料');
 
-    // 新舊品分類改在前端即時計算(距最新資料日14天內首次出現=新品)，不再依賴後端預先計算的欄位
+    // 新舊品分類：優先採用「商品分類」分頁(來自「2026-駁二十周年-營運大表」商品總表 G 欄權威分類，
+    // 透過 IMPORTRANGE 即時同步，A=新品/B=舊品)，商品名稱比對時去除結尾多餘的「 -」與空白。
+    // 若該分頁不存在或有商品名稱比對不到，則 fallback 為「距最新資料日14天內首次出現=新品」的推算規則。
+    function normName(s){
+      if(s==null) return '';
+      return String(s).trim().replace(/\s*-\s*$/,'').trim();
+    }
+    const classMap = {};
+    if(wsClass){
+      const classRows = XLSX.utils.sheet_to_json(wsClass, { header:1, defval:null, raw:true });
+      for(let i=1;i<classRows.length;i++){
+        const r = classRows[i];
+        if(!r || r[0]==null) continue;
+        const ab = r[3];
+        if(ab!=='A' && ab!=='B') continue;
+        classMap[normName(r[0])] = ab==='A' ? '新品' : '舊品';
+      }
+    }
+
     const maxDateStr = RECORDS.reduce((m,r)=> r.d>m? r.d : m, RECORDS[0].d);
     const maxDateMs = new Date(maxDateStr+'T00:00:00').getTime();
     const firstSeen = {};
     RECORDS.forEach(r=>{ if(!firstSeen[r.p] || r.d<firstSeen[r.p]) firstSeen[r.p]=r.d; });
     const newOldMap = {};
     Object.keys(firstSeen).forEach(p=>{
+      const viaClass = classMap[normName(p)];
+      if(viaClass){ newOldMap[p] = viaClass; return; }
       const ageDays = Math.round((maxDateMs - new Date(firstSeen[p]+'T00:00:00').getTime())/86400000);
       newOldMap[p] = ageDays <= 14 ? '新品' : '舊品';
     });
@@ -601,14 +629,26 @@ function initDashboard(){
 
   function renderVendor(){
     const agg = {};
-    RECORDS.forEach(r=>{ if(!agg[r.v]) agg[r.v]={rev:0,qty:0}; agg[r.v].rev+=r.rev; agg[r.v].qty+=r.n; });
+    RECORDS.forEach(r=>{
+      if(!agg[r.v]) agg[r.v]={rev:0,qty:0,newRev:0,oldRev:0};
+      agg[r.v].rev+=r.rev; agg[r.v].qty+=r.n;
+      if(r.no==='新品') agg[r.v].newRev+=r.rev; else agg[r.v].oldRev+=r.rev;
+    });
     const arr = Object.entries(agg).map(([v,x])=>({v,...x})).sort((a,b)=>b.rev-a.rev);
     const total = arr.reduce((a,b)=>a+b.rev,0);
     const maxRev = arr.length? arr[0].rev:1;
-    document.getElementById('vendorBars').innerHTML = arr.map(x=>`
+    document.getElementById('vendorBars').innerHTML = arr.map(x=>{
+      const splitTotal = x.newRev + x.oldRev;
+      const newPct = splitTotal? x.newRev/splitTotal*100 : 0;
+      const oldPct = splitTotal? x.oldRev/splitTotal*100 : 0;
+      return `
       <div class="bar-row"><div class="name" title="${x.v}">${x.v}</div>
       <div class="track"><div class="bar" style="width:${Math.max(2,x.rev/maxRev*100)}%"></div></div>
-      <div class="val">$${fmtNum(x.rev)} (${fmtPct(x.rev/total)})</div></div>`).join('');
+      <div class="val">$${fmtNum(x.rev)} (${fmtPct(x.rev/total)})</div></div>
+      <div class="vendor-split-row"><div class="name"></div>
+      <div class="split-track">${newPct>0?`<div class="split-new" style="width:${newPct}%"></div>`:''}${oldPct>0?`<div class="split-old" style="width:${oldPct}%"></div>`:''}</div>
+      <div class="split-val">新品 ${fmtPct(newPct/100)}／舊品 ${fmtPct(oldPct/100)}</div></div>`;
+    }).join('');
   }
   renderVendor();
 
