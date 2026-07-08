@@ -257,7 +257,7 @@ async function loadData(){
     if(RECORDS.length === 0) throw new Error('試算表「原始彙整」中未找到交易資料，請確認 IMPORTDATA 公式是否已成功載入資料');
 
     // 新舊品分類：優先採用「商品分類」分頁(來自「2026-駁二十周年-營運大表」商品總表 G 欄權威分類，
-    // 透過 IMPORTRANGE 即時同步，A=新品/B=舊品/贈品)，商品名稱比對時去除結尾多餘的「 -」與空白。
+    // 透過 IMPORTRANGE 即時同步，A=新品/B=舊品)，商品名稱比對時去除結尾多餘的「 -」與空白。
     // 若該分頁不存在或有商品名稱比對不到，則 fallback 為「距最新資料日14天內首次出現=新品」的推算規則。
     function normName(s){
       if(s==null) return '';
@@ -671,12 +671,10 @@ function initDashboard(){
     }).join('');
 
     const totalGacha = rows.reduce((a,r)=>a+r.gacha,0);
-    const totalGachaRev = totalGacha*200;
     const daysWithGacha = rows.filter(r=>r.gacha>0).length;
     const avgGacha = daysWithGacha? Math.round(totalGacha/daysWithGacha) : 0;
     document.getElementById('gachaKpis').innerHTML = `
       <div class="kpi"><div class="label">扭蛋總數量</div><div class="value">${fmtNum(totalGacha)}</div></div>
-      <div class="kpi"><div class="label">扭蛋總營收(每顆$200)</div><div class="value">$${fmtNum(totalGachaRev)}</div></div>
       <div class="kpi"><div class="label">有出貨日平均數量</div><div class="value">${fmtNum(avgGacha)}</div></div>
     `;
   }
