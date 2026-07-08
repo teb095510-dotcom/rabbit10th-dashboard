@@ -159,8 +159,10 @@
 <section id="overview">
   <div class="card">
     <canvas id="overviewChart" height="100"></canvas>
+    <div class="kpi-row" id="gachaKpis" style="margin-top:16px;"></div>
+    <div class="legend-note">扭蛋數量統計來源：「2026-駁二十周年-營運大表」月報分頁扭蛋現金欄位換算(每顆200元)，透過 Google 試算表 IMPORTRANGE 即時同步</div>
     <div class="scroll-table" style="margin-top:16px;">
-      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th></tr></thead><tbody></tbody></table>
+      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th><th>扭蛋數量</th></tr></thead><tbody></tbody></table>
     </div>
   </div>
 </section>
@@ -207,6 +209,7 @@ let RECORDS = [];
 let CALENDAR = {};
 let CLOSED_DAYS = [];
 let DATE_MIN = "", DATE_MAX = "";
+let GACHA = {};
 
 function fmtNum(n){ return Math.round(n).toLocaleString('zh-Hant'); }
 function fmtPct(n){ return (n*100).toFixed(1)+'%'; }
@@ -238,6 +241,7 @@ async function loadData(){
     const wsMain = wb.Sheets['原始彙整'];
     const wsCal = wb.Sheets['營業日曆'];
     const wsClass = wb.Sheets['商品分類'];
+    const wsGacha = wb.Sheets['工作表4'];
     if(!wsMain || !wsCal) throw new Error('試算表中找不到「原始彙整」或「營業日曆」工作表，請確認已依說明設定 IMPORTDATA 公式');
 
     // master_daily.csv 欄位: 日期,日期區間(若為推算合併值),資料狀態,廠商,SKU,商品名稱,售價,銷售數量,退回數量,淨銷售數量,售額總計
@@ -269,6 +273,20 @@ async function loadData(){
         if(ab!=='A' && ab!=='B' && ab!=='贈品') continue;
         classMap[normName(r[0])] = ab==='A' ? '新品' : (ab==='B' ? '舊品' : '贈品');
       }
+    }
+
+    // 扭蛋數量統計：來源為「2026-駁二十周年-營運大表」月報分頁(扭蛋現金÷200＝扭蛋數量)，
+    // 透過 IMPORTRANGE 同步至本試算表「工作表4」分頁(欄位: A空白,B日期,C星期,D天氣,E當日營收,F POS營收,G扭蛋現金,H扭蛋數量)。
+    // 未營業/尚無資料的日期來源端可能為文字「-」或錯誤值，一律以 num() 安全轉換為 0，不影響統計。
+    GACHA = {};
+    if(wsGacha){
+      const gachaRows = XLSX.utils.sheet_to_json(wsGacha, { header:1, defval:null, raw:true });
+      gachaRows.forEach(r=>{
+        if(!r || r[1]==null) return;
+        const d = xlDate(r[1]);
+        if(!d) return;
+        GACHA[d] = num(r[7]);
+      });
     }
 
     const maxDateStr = RECORDS.reduce((m,r)=> r.d>m? r.d : m, RECORDS[0].d);
@@ -640,7 +658,7 @@ function initDashboard(){
       byDate[r.d].rev += r.rev; byDate[r.d].qty += r.n;
       if(r.n>0) byDate[r.d].products.add(r.p);
     });
-    const rows = allDates.map(d=>({d, rev:byDate[d].rev, qty:byDate[d].qty, cnt:byDate[d].products.size}));
+    const rows = allDates.map(d=>({d, rev:byDate[d].rev, qty:byDate[d].qty, cnt:byDate[d].products.size, gacha:GACHA[d]||0}));
     drawLineChart(document.getElementById('overviewChart'), rows.map(r=>r.d), [{data:rows.map(r=>r.rev), color:'#2F5496', label:'銷售額'}], {title:'每日銷售額趨勢'});
     const tbody = document.querySelector('#overviewTable tbody');
     tbody.innerHTML = rows.map((r,i)=>{
@@ -649,8 +667,18 @@ function initDashboard(){
       const info = getDayInfo(r.d);
       const cls = info.isClosed ? ' class="closed-row"' : '';
       const statusLabel = info.isClosed ? (info.closedNote || '未營業') : '營業';
-      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${statusLabel}</td></tr>`;
+      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${statusLabel}</td><td class="num">${fmtNum(r.gacha)}</td></tr>`;
     }).join('');
+
+    const totalGacha = rows.reduce((a,r)=>a+r.gacha,0);
+    const totalGachaRev = totalGacha*200;
+    const daysWithGacha = rows.filter(r=>r.gacha>0).length;
+    const avgGacha = daysWithGacha? Math.round(totalGacha/daysWithGacha) : 0;
+    document.getElementById('gachaKpis').innerHTML = `
+      <div class="kpi"><div class="label">扭蛋總數量</div><div class="value">${fmtNum(totalGacha)}</div></div>
+      <div class="kpi"><div class="label">扭蛋總營收(每顆$200)</div><div class="value">$${fmtNum(totalGachaRev)}</div></div>
+      <div class="kpi"><div class="label">有出貨日平均數量</div><div class="value">${fmtNum(avgGacha)}</div></div>
+    `;
   }
   renderOverview();
 
