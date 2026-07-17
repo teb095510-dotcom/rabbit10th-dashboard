@@ -237,15 +237,12 @@ async function loadData(){
     const buf = await res.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(buf), { type:'array', raw:true, cellDates:false });
 
-    // 這兩個分頁預期由 IMPORTDATA() 公式自動從 Google Drive 上的 master_daily.csv /
-    // business_calendar.csv 即時匯入(見「資料品質」分頁的設定說明)，欄位順序需與這兩個 CSV 的原始欄位一致。
     const wsMain = wb.Sheets['原始彙整'];
     const wsCal = wb.Sheets['營業日曆'];
     const wsClass = wb.Sheets['商品分類'];
     const wsGacha = wb.Sheets['工作表4'];
     if(!wsMain || !wsCal) throw new Error('試算表中找不到「原始彙整」或「營業日曆」工作表，請確認已依說明設定 IMPORTDATA 公式');
 
-    // master_daily.csv 欄位: 日期,日期區間(若為推算合併值),資料狀態,廠商,SKU,商品名稱,售價,銷售數量,退回數量,淨銷售數量,售額總計
     const mainRows = XLSX.utils.sheet_to_json(wsMain, { header:1, defval:null, raw:true });
     RECORDS = [];
     for(let i=1;i<mainRows.length;i++){
@@ -257,9 +254,6 @@ async function loadData(){
     }
     if(RECORDS.length === 0) throw new Error('試算表「原始彙整」中未找到交易資料，請確認 IMPORTDATA 公式是否已成功載入資料');
 
-    // 新舊品分類：優先採用「商品分類」分頁(來自「2026-駁二十周年-營運大表」商品總表 G 欄權威分類，
-    // 透過 IMPORTRANGE 即時同步，A=新品/B=舊品)，商品名稱比對時去除結尾多餘的「 -」與空白。
-    // 若該分頁不存在或有商品名稱比對不到，則 fallback 為「距最新資料日14天內首次出現=新品」的推算規則。
     function normName(s){
       if(s==null) return '';
       return String(s).trim().replace(/\s*-\s*$/,'').trim();
@@ -276,9 +270,6 @@ async function loadData(){
       }
     }
 
-    // 扭蛋數量統計：來源為「2026-駁二十周年-營運大表」月報分頁(扭蛋現金÷200＝扭蛋數量)，
-    // 透過 IMPORTRANGE 同步至本試算表「工作表4」分頁(欄位: A空白,B日期,C星期,D天氣,E當日營收,F POS營收,G扭蛋現金,H扭蛋數量)。
-    // 未營業/尚無資料的日期來源端可能為文字「-」或錯誤值，一律以 num() 安全轉換為 0，不影響統計。
     GACHA = {};
     if(wsGacha){
       const gachaRows = XLSX.utils.sheet_to_json(wsGacha, { header:1, defval:null, raw:true });
@@ -303,7 +294,6 @@ async function loadData(){
     });
     RECORDS.forEach(r=>{ r.no = newOldMap[r.p] || '舊品'; });
 
-    // business_calendar.csv 欄位: 日期,星期,是否營業,備註,商品筆數,淨銷售數量,淨銷售額
     const calRows = XLSX.utils.sheet_to_json(wsCal, { header:1, defval:null, raw:true });
     CALENDAR = {}; CLOSED_DAYS = [];
     for(let i=1;i<calRows.length;i++){
@@ -350,7 +340,6 @@ function getDayInfo(dateStr){
 }
 
 function initDashboard(){
-  // tabs
   document.querySelectorAll('#tabs button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('active'));
@@ -584,8 +573,6 @@ function initDashboard(){
       qtyByDate[r.d] = (qtyByDate[r.d]||0) + r.n;
       revByDate[r.d] = (revByDate[r.d]||0) + r.rev;
     });
-    // 「全部商品」模式下，銷售額額外加計扭蛋營業額(扭蛋數量×200元)；扭蛋不是商品明細，
-    // 不放進 RECORDS，所以不會影響銷售排行/廠商分析/退貨分析等其他分頁。
     const includeGacha = modeSelect.value === 'all';
     document.getElementById('trendGachaNote').style.display = includeGacha ? 'block' : 'none';
     if(includeGacha){
@@ -628,7 +615,7 @@ function initDashboard(){
     const ticketAgg = {};
     RECORDS.forEach(r=>{
       if(r.d<start || r.d>end) return;
-      if(r.no==='贈品') return; // 贈品不列入任何排行
+      if(r.no==='贈品') return;
       if(r.v===TICKET_VENDOR){
         if(!ticketAgg[r.p]) ticketAgg[r.p] = {qty:0, rev:0};
         ticketAgg[r.p].qty += r.n; ticketAgg[r.p].rev += r.rev;
