@@ -125,6 +125,7 @@
     </div>
     <div class="kpi-row" id="trendKpis"></div>
     <div class="legend-note">日期標籤含星期與台灣國定假日(依人事行政總處115年辦公日曆表)<span class="swatch" style="background:#f2f2f2;border:1px solid #ddd;"></span>週末<span class="swatch" style="background:#fce4d6;"></span>國定假日<span class="swatch" style="background:#D9D2E9;"></span>未營業日 ｜ 滑鼠移到折線上可查看該日數值 ｜ 新品定義：近14天內首次出現(目前新品<span id="nNewSpan">-</span>項/舊品<span id="nOldSpan">-</span>項)</div>
+    <div class="legend-note" id="trendGachaNote" style="display:none;">＊「① 全部商品」模式下的銷售額已加計扭蛋營業額(扭蛋數量×200元估算)</div>
     <canvas id="trendChartQty" height="110"></canvas>
     <canvas id="trendChartRev" height="110" style="margin-top:20px;"></canvas>
   </div>
@@ -583,6 +584,13 @@ function initDashboard(){
       qtyByDate[r.d] = (qtyByDate[r.d]||0) + r.n;
       revByDate[r.d] = (revByDate[r.d]||0) + r.rev;
     });
+    // 「全部商品」模式下，銷售額額外加計扭蛋營業額(扭蛋數量×200元)；扭蛋不是商品明細，
+    // 不放進 RECORDS，所以不會影響銷售排行/廠商分析/退貨分析等其他分頁。
+    const includeGacha = modeSelect.value === 'all';
+    document.getElementById('trendGachaNote').style.display = includeGacha ? 'block' : 'none';
+    if(includeGacha){
+      dates.forEach(d=>{ revByDate[d] = (revByDate[d]||0) + (GACHA[d]||0)*200; });
+    }
     const qtyData = dates.map(d=>qtyByDate[d]);
     const revData = dates.map(d=>revByDate[d]);
     drawLineChart(document.getElementById('trendChartQty'), dates, [{data:qtyData,color:'#2F5496',label:'銷售數量'}], {title:'銷售數量趨勢'});
@@ -631,7 +639,7 @@ function initDashboard(){
     });
     const key = rankMode==='qty' ? 'qty' : 'rev';
 
-    const arr = Object.entries(agg).map(([p,v])=>({p,...v})).sort((a,b)=>b[key]-a[key]).slice(0,20);
+    const arr = Object.entries(agg).map(([p,v])=>({p,...v})).sort((a,b)=>b[key]-a[key]).slice(0,30);
     const maxVal = arr.length? arr[0][key] : 1;
     document.getElementById('rankBars').innerHTML = arr.slice(0,10).map(x=>`
       <div class="bar-row"><div class="name" title="${x.p}">${x.p}</div>
