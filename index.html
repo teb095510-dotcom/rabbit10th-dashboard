@@ -516,6 +516,22 @@ function initDashboard(){
       });
     });
 
+    if(opts.labelPoints){
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      series.forEach((s,si)=>{
+        const dy = si%2===0 ? -6 : 13; // 交錯上下標註，避免多條線的數字重疊
+        points[si].forEach((p,i)=>{
+          if(!p) return;
+          const v = s.data[i];
+          if(v===null || v===undefined) return;
+          ctx.fillStyle = s.color;
+          ctx.fillText(fmtNum(v), p[0], p[1]+dy);
+        });
+      });
+      ctx.textAlign = 'left';
+    }
+
     ctx.font='10px sans-serif';
     const step = Math.max(1, Math.ceil(n/8));
     labels.forEach((lb,i)=>{
@@ -609,7 +625,7 @@ function initDashboard(){
     drawLineChart(document.getElementById('trendChartTicket'), dates, [
       {data:onsiteData,color:'#2F5496',label:'現場購票人數'},
       {data:klookData,color:'#E8A33D',label:'Klook核銷人數'}
-    ], {title:'現場購票 vs Klook核銷人數趨勢'});
+    ], {title:'現場購票 vs Klook核銷人數趨勢', labelPoints:true});
 
     const totQty = qtyData.reduce((a,b)=>a+b,0);
     const totRev = revData.reduce((a,b)=>a+b,0);
