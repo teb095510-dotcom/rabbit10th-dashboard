@@ -351,6 +351,12 @@ function getDayInfo(dateStr){
 
 function initDashboard(){
   const TICKET_VENDOR = '(無廠商-門票/現場服務類)';
+  // 所有日期區間篩選器的預設值：起始固定為展覽開放日 2026-06-05，結束為使用者開啟頁面當下的實際日期(非資料最後更新日)
+  const DEFAULT_RANGE_START = '2026-06-05';
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
   // tabs
   document.querySelectorAll('#tabs button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -577,8 +583,8 @@ function initDashboard(){
       renderTrend();
     });
   });
-  document.getElementById('startDate').value = DATE_MIN;
-  document.getElementById('endDate').value = DATE_MAX;
+  document.getElementById('startDate').value = DEFAULT_RANGE_START;
+  document.getElementById('endDate').value = todayStr();
   function syncTrendDates(){
     const start = document.getElementById('startDate').value;
     const endInput = document.getElementById('endDate');
@@ -647,8 +653,8 @@ function initDashboard(){
       renderRank();
     });
   });
-  document.getElementById('rankStart').value = DATE_MIN;
-  document.getElementById('rankEnd').value = DATE_MAX;
+  document.getElementById('rankStart').value = DEFAULT_RANGE_START;
+  document.getElementById('rankEnd').value = todayStr();
   document.getElementById('rankStart').addEventListener('change', renderRank);
   document.getElementById('rankEnd').addEventListener('change', renderRank);
   const EXTRA_EXCLUDE_FROM_RANK = ['特展扭蛋機抽獎', '一番賞抽獎'];
