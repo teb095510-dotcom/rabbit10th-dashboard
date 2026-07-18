@@ -141,7 +141,7 @@
         <button data-rankmode="qty">銷售數量排行</button>
       </div>
     </div>
-    <div class="legend-note">已排除商品總表標記為「贈品」的品項，不列入商品排行</div>
+    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」及商品名稱含「滿額贈」的品項，不列入商品排行</div>
     <div id="rankBars"></div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="rankTable"><thead><tr><th>排名</th><th>商品名稱</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
@@ -638,7 +638,8 @@ function initDashboard(){
     const extraAgg = {};
     RECORDS.forEach(r=>{
       if(r.d<start || r.d>end) return;
-      if(r.no==='贈品') return; // 贈品不列入任何排行
+      if(r.no==='贈品') return; // 商品總表(營運大表)G欄標記為「贈品」的品項，不列入商品排行
+      if(r.p.includes('滿額贈')) return; // 商品名稱含「滿額贈」的滿額贈品，不列入商品排行(即使未列於商品總表分類中)
       if(r.v===TICKET_VENDOR){
         if(!ticketAgg[r.p]) ticketAgg[r.p] = {qty:0, rev:0};
         ticketAgg[r.p].qty += r.n; ticketAgg[r.p].rev += r.rev;
