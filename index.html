@@ -82,7 +82,7 @@
 
 <div id="appRoot">
 <nav id="tabs">
-  <button data-tab="trend" class="active">商品趨勢</button>
+  <button data-tab="trend" class="active">銷售趨勢圖</button>
   <button data-tab="rank">銷售排行</button>
   <button data-tab="overview">每日總覽</button>
   <button data-tab="vendor">廠商別分析</button>
@@ -128,6 +128,8 @@
     <div class="legend-note" id="trendGachaNote" style="display:none;">＊「① 全部商品」模式下的銷售額已加計扭蛋營業額(扭蛋數量×200元估算)</div>
     <canvas id="trendChartQty" height="110"></canvas>
     <canvas id="trendChartRev" height="110" style="margin-top:20px;"></canvas>
+    <div class="legend-note" style="margin-top:20px;">現場購票人數：「十週年特展-現場票券」各票種銷售數量加總；Klook核銷人數：「Klook兌換票券」各票種銷售數量加總(早鳥/展期/套票優惠合計)。此圖不受上方「選擇方式」篩選影響，僅受起訖日期控制</div>
+    <canvas id="trendChartTicket" height="110"></canvas>
   </div>
 </section>
 
@@ -149,7 +151,7 @@
   </div>
   <div class="card">
     <h3 style="margin-top:0;">票券銷售排行</h3>
-    <div class="legend-note">現場票券獨立統計，不併入上方商品排行；Klook兌換票券已併入同一票種統計</div>
+    <div class="legend-note">現場票券獨立統計，不併入上方商品排行；Klook兌換票券已併入同一票種統計，並依早鳥／展期／套票優惠方案分開列示</div>
     <div id="ticketBars"></div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="ticketTable"><thead><tr><th>排名</th><th>票種</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
@@ -196,7 +198,7 @@
     <div class="info-box">
       <b>未營業日判定規則：</b>展期日曆自資料最早一天起算至目前最新資料日。凡符合以下任一條件的日期，一律視為「未營業日」，數值以0呈現(非資料缺口)：
       ① 資料夾內完全沒有該日期的商品銷售總表檔案；② 該日期的檔案存在，但內容僅有表頭與總計列、無任何商品明細(即當日無銷售紀錄)。
-      此規則已套用於「商品趨勢」與「每日總覽」的日期軸，未營業日以淺紫色標示，不會被誤判為資料矛盾或缺口。目前共 <span id="nClosedSpan">-</span> 天未營業，詳見下方清單。
+      此規則已套用於「銷售趨勢圖」與「每日總覽」的日期軸，未營業日以淺紫色標示，不會被誤判為資料矛盾或缺口。目前共 <span id="nClosedSpan">-</span> 天未營業，詳見下方清單。
       <br><br><b>新舊品分類說明：</b>優先採用「2026-駁二十周年-營運大表」商品總表的權威分類(G欄，A=新品/B=舊品)，透過 Google 試算表 IMPORTRANGE 公式即時同步至本試算表「商品分類」分頁，商品總表更新後會自動反映。若商品未列於商品總表(例如票券、新上架SKU)，則 fallback 採「商品首次出現日期」推算：距最新資料日 14 天內首次出現＝新品，否則＝舊品。
       <br><br><b>資料來源：</b>本頁資料即時讀取自 Google 試算表，試算表內以 IMPORTDATA() 公式直接連結 Google Drive 上「動態分析儀表板」資料夾內的 master_daily.csv 與 business_calendar.csv(本機整併腳本產生後透過雲端硬碟同步上傳)，Google 試算表會自動定期重新抓取，全程無需手動操作，此頁面每次開啟也會自動顯示當下最新內容。
     </div>
@@ -245,15 +247,12 @@ async function loadData(){
     const buf = await res.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(buf), { type:'array', raw:true, cellDates:false });
 
-    // 這兩個分頁預期由 IMPORTDATA() 公式自動從 Google Drive 上的 master_daily.csv /
-    // business_calendar.csv 即時匯入(見「資料品質」分頁的設定說明)，欄位順序需與這兩個 CSV 的原始欄位一致。
     const wsMain = wb.Sheets['原始彙整'];
     const wsCal = wb.Sheets['營業日曆'];
     const wsClass = wb.Sheets['商品分類'];
     const wsGacha = wb.Sheets['工作表4'];
     if(!wsMain || !wsCal) throw new Error('試算表中找不到「原始彙整」或「營業日曆」工作表，請確認已依說明設定 IMPORTDATA 公式');
 
-    // master_daily.csv 欄位: 日期,日期區間(若為推算合併值),資料狀態,廠商,SKU,商品名稱,售價,銷售數量,退回數量,淨銷售數量,售額總計
     const mainRows = XLSX.utils.sheet_to_json(wsMain, { header:1, defval:null, raw:true });
     RECORDS = [];
     for(let i=1;i<mainRows.length;i++){
@@ -265,9 +264,6 @@ async function loadData(){
     }
     if(RECORDS.length === 0) throw new Error('試算表「原始彙整」中未找到交易資料，請確認 IMPORTDATA 公式是否已成功載入資料');
 
-    // 新舊品分類：優先採用「商品分類」分頁(來自「2026-駁二十周年-營運大表」商品總表 G 欄權威分類，
-    // 透過 IMPORTRANGE 即時同步，A=新品/B=舊品)，商品名稱比對時去除結尾多餘的「 -」與空白。
-    // 若該分頁不存在或有商品名稱比對不到，則 fallback 為「距最新資料日14天內首次出現=新品」的推算規則。
     function normName(s){
       if(s==null) return '';
       return String(s).trim().replace(/\s*-\s*$/,'').trim();
@@ -284,9 +280,6 @@ async function loadData(){
       }
     }
 
-    // 扭蛋數量統計：來源為「2026-駁二十周年-營運大表」月報分頁(扭蛋現金÷200＝扭蛋數量)，
-    // 透過 IMPORTRANGE 同步至本試算表「工作表4」分頁(欄位: A空白,B日期,C星期,D天氣,E當日營收,F POS營收,G扭蛋現金,H扭蛋數量)。
-    // 未營業/尚無資料的日期來源端可能為文字「-」或錯誤值，一律以 num() 安全轉換為 0，不影響統計。
     GACHA = {};
     if(wsGacha){
       const gachaRows = XLSX.utils.sheet_to_json(wsGacha, { header:1, defval:null, raw:true });
@@ -311,7 +304,6 @@ async function loadData(){
     });
     RECORDS.forEach(r=>{ r.no = newOldMap[r.p] || '舊品'; });
 
-    // business_calendar.csv 欄位: 日期,星期,是否營業,備註,商品筆數,淨銷售數量,淨銷售額
     const calRows = XLSX.utils.sheet_to_json(wsCal, { header:1, defval:null, raw:true });
     CALENDAR = {}; CLOSED_DAYS = [];
     for(let i=1;i<calRows.length;i++){
@@ -358,6 +350,7 @@ function getDayInfo(dateStr){
 }
 
 function initDashboard(){
+  const TICKET_VENDOR = '(無廠商-門票/現場服務類)';
   // tabs
   document.querySelectorAll('#tabs button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -592,8 +585,6 @@ function initDashboard(){
       qtyByDate[r.d] = (qtyByDate[r.d]||0) + r.n;
       revByDate[r.d] = (revByDate[r.d]||0) + r.rev;
     });
-    // 「全部商品」模式下，銷售額額外加計扭蛋營業額(扭蛋數量×200元)；扭蛋不是商品明細，
-    // 不放進 RECORDS，所以不會影響銷售排行/廠商分析/退貨分析等其他分頁。
     const includeGacha = modeSelect.value === 'all';
     document.getElementById('trendGachaNote').style.display = includeGacha ? 'block' : 'none';
     if(includeGacha){
@@ -603,6 +594,22 @@ function initDashboard(){
     const revData = dates.map(d=>revByDate[d]);
     drawLineChart(document.getElementById('trendChartQty'), dates, [{data:qtyData,color:'#2F5496',label:'銷售數量'}], {title:'銷售數量趨勢'});
     drawLineChart(document.getElementById('trendChartRev'), dates, [{data:revData,color:'#C00000',label:'銷售額'}], {title:'銷售額趨勢'});
+
+    // 現場購票人數 vs Klook核銷人數：獨立於「選擇方式」篩選，僅受起訖日期控制
+    const onsiteByDate = {}, klookByDate = {};
+    dates.forEach(d=>{ onsiteByDate[d]=0; klookByDate[d]=0; });
+    RECORDS.forEach(r=>{
+      if(r.d<start || r.d>end) return;
+      if(r.v!==TICKET_VENDOR) return;
+      if(r.p.indexOf('十週年特展-現場票券')===0) onsiteByDate[r.d] = (onsiteByDate[r.d]||0) + r.n;
+      else if(r.p.indexOf('Klook兌換票券')===0) klookByDate[r.d] = (klookByDate[r.d]||0) + r.n;
+    });
+    const onsiteData = dates.map(d=>onsiteByDate[d]);
+    const klookData = dates.map(d=>klookByDate[d]);
+    drawLineChart(document.getElementById('trendChartTicket'), dates, [
+      {data:onsiteData,color:'#2F5496',label:'現場購票人數'},
+      {data:klookData,color:'#E8A33D',label:'Klook核銷人數'}
+    ], {title:'現場購票 vs Klook核銷人數趨勢'});
 
     const totQty = qtyData.reduce((a,b)=>a+b,0);
     const totRev = revData.reduce((a,b)=>a+b,0);
@@ -628,7 +635,6 @@ function initDashboard(){
   document.getElementById('rankEnd').value = DATE_MAX;
   document.getElementById('rankStart').addEventListener('change', renderRank);
   document.getElementById('rankEnd').addEventListener('change', renderRank);
-  const TICKET_VENDOR = '(無廠商-門票/現場服務類)';
   const EXTRA_EXCLUDE_FROM_RANK = ['特展扭蛋機抽獎', '一番賞抽獎'];
   function renderRank(){
     const start = document.getElementById('rankStart').value;
