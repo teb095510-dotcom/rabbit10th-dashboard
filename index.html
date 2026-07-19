@@ -149,7 +149,7 @@
         <button data-rankmode="qty">銷售數量排行</button>
       </div>
     </div>
-    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」及商品名稱含「滿額贈」的品項，不列入商品排行</div>
+    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」、商品名稱含「滿額贈」、以及特展扭蛋機抽獎／一番賞抽獎的品項，不列入商品排行</div>
     <div id="rankBars"></div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="rankTable"><thead><tr><th>排名</th><th>商品名稱</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
@@ -161,14 +161,6 @@
     <div id="ticketBars"></div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="ticketTable"><thead><tr><th>排名</th><th>票種</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
-    </div>
-  </div>
-  <div class="card">
-    <h3 style="margin-top:0;">扭蛋機／一番賞抽獎排行</h3>
-    <div class="legend-note">特展扭蛋機抽獎、一番賞抽獎獨立統計，不併入上方商品排行</div>
-    <div id="extraBars"></div>
-    <div class="scroll-table" style="margin-top:16px;">
-      <table id="extraTable"><thead><tr><th>排名</th><th>品項</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
     </div>
   </div>
 </section>
@@ -709,19 +701,14 @@ function initDashboard(){
     const end = document.getElementById('rankEnd').value;
     const agg = {};
     const ticketAgg = {};
-    const extraAgg = {};
     RECORDS.forEach(r=>{
       if(r.d<start || r.d>end) return;
       if(r.no==='贈品') return; // 商品總表(營運大表)G欄標記為「贈品」的品項，不列入商品排行
       if(r.p.includes('滿額贈')) return; // 商品名稱含「滿額贈」的滿額贈品，不列入商品排行(即使未列於商品總表分類中)
+      if(EXTRA_EXCLUDE_FROM_RANK.includes(r.p)) return; // 特展扭蛋機抽獎、一番賞抽獎不列入銷售排行(不顯示於任何排行區塊)
       if(r.v===TICKET_VENDOR){
         if(!ticketAgg[r.p]) ticketAgg[r.p] = {qty:0, rev:0};
         ticketAgg[r.p].qty += r.n; ticketAgg[r.p].rev += r.rev;
-        return;
-      }
-      if(EXTRA_EXCLUDE_FROM_RANK.includes(r.p)){
-        if(!extraAgg[r.p]) extraAgg[r.p] = {qty:0, rev:0};
-        extraAgg[r.p].qty += r.n; extraAgg[r.p].rev += r.rev;
         return;
       }
       if(!agg[r.p]) agg[r.p] = {qty:0, rev:0};
@@ -746,15 +733,6 @@ function initDashboard(){
       <div class="val">${key==='rev'?'$':''}${fmtNum(x[key])}</div></div>`).join('');
     const ticketTbody = document.querySelector('#ticketTable tbody');
     ticketTbody.innerHTML = ticketArr.map((x,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${x.p}</td><td class="num">$${fmtNum(x.rev)}</td><td class="num">${fmtNum(x.qty)}</td></tr>`).join('');
-
-    const extraArr = Object.entries(extraAgg).map(([p,v])=>({p,...v})).sort((a,b)=>b[key]-a[key]);
-    const extraMaxVal = extraArr.length? extraArr[0][key] : 1;
-    document.getElementById('extraBars').innerHTML = extraArr.map(x=>`
-      <div class="bar-row"><div class="name" title="${x.p}">${x.p}</div>
-      <div class="track"><div class="bar" style="width:${Math.max(2,x[key]/extraMaxVal*100)}%"></div></div>
-      <div class="val">${key==='rev'?'$':''}${fmtNum(x[key])}</div></div>`).join('');
-    const extraTbody = document.querySelector('#extraTable tbody');
-    extraTbody.innerHTML = extraArr.map((x,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${x.p}</td><td class="num">$${fmtNum(x.rev)}</td><td class="num">${fmtNum(x.qty)}</td></tr>`).join('');
   }
   renderRank();
 
