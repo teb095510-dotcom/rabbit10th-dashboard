@@ -144,12 +144,13 @@
     <div class="controls">
       <div><label>起始日期</label><input type="date" id="rankStart"></div>
       <div><label>結束日期</label><input type="date" id="rankEnd"></div>
+      <div><label>廠商</label><select id="rankVendorSelect"><option value="">全部廠商</option></select></div>
       <div class="mode-btns" id="rankModeBtns">
         <button data-rankmode="rev" class="active">銷售額排行</button>
         <button data-rankmode="qty">銷售數量排行</button>
       </div>
     </div>
-    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」、商品名稱含「滿額贈」、以及特展扭蛋機抽獎／一番賞抽獎的品項，不列入商品排行</div>
+    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」、商品名稱含「滿額贈」、以及特展扭蛋機抽獎／一番賞抽獎的品項，不列入商品排行；選擇特定廠商後，下方商品排行僅顯示該廠商的商品</div>
     <div id="rankBars"></div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="rankTable"><thead><tr><th>排名</th><th>商品名稱</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
@@ -695,14 +696,19 @@ function initDashboard(){
   document.getElementById('rankEnd').value = todayStr();
   document.getElementById('rankStart').addEventListener('change', renderRank);
   document.getElementById('rankEnd').addEventListener('change', renderRank);
+  const rankVendorSelect = document.getElementById('rankVendorSelect');
+  rankVendorSelect.innerHTML = '<option value="">全部廠商</option>' + vendors.filter(v=>v!==TICKET_VENDOR).map(v=>`<option value="${v}">${v}</option>`).join('');
+  rankVendorSelect.addEventListener('change', renderRank);
   const EXTRA_EXCLUDE_FROM_RANK = ['特展扭蛋機抽獎', '一番賞抽獎'];
   function renderRank(){
     const start = document.getElementById('rankStart').value;
     const end = document.getElementById('rankEnd').value;
+    const selVendor = rankVendorSelect.value;
     const agg = {};
     const ticketAgg = {};
     RECORDS.forEach(r=>{
       if(r.d<start || r.d>end) return;
+      if(selVendor && r.v!==selVendor) return; // 只顯示選定廠商的商品
       if(r.no==='贈品') return; // 商品總表(營運大表)G欄標記為「贈品」的品項，不列入商品排行
       if(r.p.includes('滿額贈')) return; // 商品名稱含「滿額贈」的滿額贈品，不列入商品排行(即使未列於商品總表分類中)
       if(EXTRA_EXCLUDE_FROM_RANK.includes(r.p)) return; // 特展扭蛋機抽獎、一番賞抽獎不列入銷售排行(不顯示於任何排行區塊)
