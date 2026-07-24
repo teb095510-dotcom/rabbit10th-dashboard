@@ -171,8 +171,20 @@
     <div class="chart-wrap"><canvas id="overviewChart" class="chart-fixed" height="280"></canvas></div>
     <div class="kpi-row" id="gachaKpis" style="margin-top:16px;"></div>
     <div class="legend-note">扭蛋數量統計來源：「2026-駁二十周年-營運大表」月報分頁扭蛋現金欄位換算(每顆200元)，透過 Google 試算表 IMPORTRANGE 即時同步</div>
+    <h3 style="margin-top:20px;">天數與天氣統計(自2026-06-05起)</h3>
+    <div class="legend-note">假日/平日依台灣行政院人事行政總處公告之國定假日與週末認定；天氣資料來源：「2026-駁二十周年-營運大表」月報工作頁D欄，透過 Google 試算表 IMPORTRANGE 同步。「其他」指天氣欄為陰天、未營業或尚無記錄的日期</div>
+    <div class="scroll-table">
+      <table id="overviewStatsTable"><thead><tr><th>類別</th><th>天數</th><th>晴天</th><th>下雨</th><th>其他</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div id="cwaCheckBox" style="margin-top:16px; padding:12px; background:#f7f7f7; border-radius:6px; font-size:13px; line-height:1.7;">
+      <strong>與氣象局公告核對說明</strong><br>
+      已核對2筆「休」（休館/停班停課）記錄，均與新聞報導的官方停班停課公告相符：<br>
+      ・6/26（豪雨特報休假）：因米克拉颱風外圍環流及鋒面影響，高雄市宣布全市停班停課，與D欄記錄相符。<br>
+      ・7/11（颱風假）：因巴威颱風影響，高雄市宣布全市停班停課，與D欄記錄相符。<br>
+      其餘一般晴天／雨天分類目前無法逐日對照中央氣象署官方觀測資料——氣象署開放資料平台（opendata.cwa.gov.tw）需申請API金鑰，CODiS歷史資料查詢系統為地圖式介面、無法有效批次查詢，故未取得金鑰前僅能以上述兩個有明確官方公告的日期進行交叉核對，其餘約45天的晴雨分類仍以D欄原始記錄為準。
+    </div>
     <div class="scroll-table" style="margin-top:16px;">
-      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th><th>扭蛋數量</th></tr></thead><tbody></tbody></table>
+      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th><th>扭蛋數量</th><th>天氣</th></tr></thead><tbody></tbody></table>
     </div>
   </div>
 </section>
@@ -220,6 +232,7 @@ let CALENDAR = {};
 let CLOSED_DAYS = [];
 let DATE_MIN = "", DATE_MAX = "";
 let GACHA = {};
+let WEATHER = {};
 
 function fmtNum(n){ return Math.round(n).toLocaleString('zh-Hant'); }
 function fmtPct(n){ return (n*100).toFixed(1)+'%'; }
@@ -289,6 +302,7 @@ async function loadData(){
     // 透過 IMPORTRANGE 同步至本試算表「工作表4」分頁(欄位: A空白,B日期,C星期,D天氣,E當日營收,F POS營收,G扭蛋現金,H扭蛋數量)。
     // 未營業/尚無資料的日期來源端可能為文字「-」或錯誤值，一律以 num() 安全轉換為 0，不影響統計。
     GACHA = {};
+    WEATHER = {};
     if(wsGacha){
       const gachaRows = XLSX.utils.sheet_to_json(wsGacha, { header:1, defval:null, raw:true });
       gachaRows.forEach(r=>{
@@ -296,6 +310,7 @@ async function loadData(){
         const d = xlDate(r[1]);
         if(!d) return;
         GACHA[d] = num(r[7]);
+        WEATHER[d] = (r[3]!=null ? String(r[3]).trim() : '');
       });
     }
 
@@ -742,14 +757,25 @@ function initDashboard(){
   }
   renderRank();
 
+  // 天氣分類：等於「晴」歸為晴天；含「雨」字(雨/暴雨/陰雨/大雨/雷雨/午後雨…)歸為下雨；其餘(陰、休、無資料)歸為其他
+  function weatherBucket(w){
+    if(!w) return '其他';
+    if(w==='晴') return '晴';
+    if(w.includes('雨')) return '雨';
+    return '其他';
+  }
+
   function renderOverview(){
+    const overviewDates = allDates.filter(d=>d>=DEFAULT_RANGE_START);
     const byDate = {};
-    allDates.forEach(d=>byDate[d]={rev:0,qty:0,products:new Set()});
+    overviewDates.forEach(d=>byDate[d]={rev:0,qty:0,products:new Set()});
     RECORDS.forEach(r=>{
+      if(r.d<DEFAULT_RANGE_START) return;
+      if(!byDate[r.d]) return;
       byDate[r.d].rev += r.rev; byDate[r.d].qty += r.n;
       if(r.n>0) byDate[r.d].products.add(r.p);
     });
-    const rows = allDates.map(d=>({d, rev:byDate[d].rev, qty:byDate[d].qty, cnt:byDate[d].products.size, gacha:GACHA[d]||0}));
+    const rows = overviewDates.map(d=>({d, rev:byDate[d].rev, qty:byDate[d].qty, cnt:byDate[d].products.size, gacha:GACHA[d]||0, weather:WEATHER[d]||''}));
     drawLineChart(document.getElementById('overviewChart'), rows.map(r=>r.d), [{data:rows.map(r=>r.rev), color:'#2F5496', label:'銷售額'}], {title:'每日銷售額趨勢'});
     const tbody = document.querySelector('#overviewTable tbody');
     tbody.innerHTML = rows.map((r,i)=>{
@@ -758,7 +784,7 @@ function initDashboard(){
       const info = getDayInfo(r.d);
       const cls = info.isClosed ? ' class="closed-row"' : '';
       const statusLabel = info.isClosed ? (info.closedNote || '未營業') : '營業';
-      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${statusLabel}</td><td class="num">${fmtNum(r.gacha)}</td></tr>`;
+      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${statusLabel}</td><td class="num">${fmtNum(r.gacha)}</td><td style="text-align:left">${r.weather||'-'}</td></tr>`;
     }).join('');
 
     const totalGacha = rows.reduce((a,r)=>a+r.gacha,0);
@@ -767,6 +793,29 @@ function initDashboard(){
     document.getElementById('gachaKpis').innerHTML = `
       <div class="kpi"><div class="label">扭蛋總數量</div><div class="value">${fmtNum(totalGacha)}</div></div>
       <div class="kpi"><div class="label">有出貨日平均數量</div><div class="value">${fmtNum(avgGacha)}</div></div>
+    `;
+
+    // 假日/平日 x 晴天/下雨/其他 統計(假日定義：台灣行政院公告國定假日 或 週末，與趨勢圖表未營業日灰底判定共用同一套 getDayInfo 邏輯)
+    const stats = {
+      假日: {days:0, 晴:0, 雨:0, 其他:0},
+      平日: {days:0, 晴:0, 雨:0, 其他:0},
+    };
+    rows.forEach(r=>{
+      const info = getDayInfo(r.d);
+      const cat = info.isOff ? '假日' : '平日';
+      stats[cat].days++;
+      stats[cat][weatherBucket(r.weather)]++;
+    });
+    const total = {
+      days: stats.假日.days + stats.平日.days,
+      晴: stats.假日.晴 + stats.平日.晴,
+      雨: stats.假日.雨 + stats.平日.雨,
+      其他: stats.假日.其他 + stats.平日.其他,
+    };
+    document.querySelector('#overviewStatsTable tbody').innerHTML = `
+      <tr><td style="text-align:left">假日</td><td class="num">${stats.假日.days}</td><td class="num">${stats.假日.晴}</td><td class="num">${stats.假日.雨}</td><td class="num">${stats.假日.其他}</td></tr>
+      <tr><td style="text-align:left">平日</td><td class="num">${stats.平日.days}</td><td class="num">${stats.平日.晴}</td><td class="num">${stats.平日.雨}</td><td class="num">${stats.平日.其他}</td></tr>
+      <tr style="font-weight:bold;"><td style="text-align:left">合計</td><td class="num">${total.days}</td><td class="num">${total.晴}</td><td class="num">${total.雨}</td><td class="num">${total.其他}</td></tr>
     `;
   }
   renderOverview();
