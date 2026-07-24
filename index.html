@@ -172,18 +172,12 @@
     <div class="kpi-row" id="gachaKpis" style="margin-top:16px;"></div>
     <div class="legend-note">扭蛋數量統計來源：「2026-駁二十周年-營運大表」月報分頁扭蛋現金欄位換算(每顆200元)，透過 Google 試算表 IMPORTRANGE 即時同步</div>
     <h3 style="margin-top:20px;">天數與天氣統計(自2026-06-05起)</h3>
-    <div class="legend-note">假日/平日依台灣行政院人事行政總處公告之國定假日與週末認定；天氣資料來源：「2026-駁二十周年-營運大表」月報工作頁D欄，透過 Google 試算表 IMPORTRANGE 同步。「其他」指天氣欄為陰天、未營業或尚無記錄的日期</div>
+    <div class="legend-note">假日/平日依台灣行政院人事行政總處公告之國定假日與週末認定；天氣資料來源：Open-Meteo 歷史氣象資料庫(整合ECMWF/NOAA等多國氣象機構再分析資料)，依駁二特區座標逐日查詢降雨量換算晴/雨，每日自動更新。「其他」指尚無資料的日期</div>
     <div class="scroll-table">
       <table id="overviewStatsTable"><thead><tr><th>類別</th><th>天數</th><th>晴天</th><th>下雨</th><th>其他</th></tr></thead><tbody></tbody></table>
     </div>
-    <div id="cwaCheckBox" style="margin-top:16px; padding:12px; background:#f7f7f7; border-radius:6px; font-size:13px; line-height:1.7;">
-      <strong>與氣象資料核對說明</strong><br>
-      1) 已核對2筆「休」（休館/停班停課）記錄，均與新聞報導的官方停班停課公告相符：6/26（豪雨特報休假，米克拉颱風外圍環流及鋒面影響）、7/11（颱風假，巴威颱風影響），與D欄記錄相符。<br>
-      2) 中央氣象署開放資料平台需申請會員及API金鑰，未申請前無法逐日查詢官方測站觀測值；改以 Open-Meteo 歷史氣象資料庫（整合ECMWF/NOAA等多國氣象機構再分析資料，免申請免金鑰）對6/5～7/24全數50天進行逐日降雨量交叉核對。結果：約41天晴雨判定一致(含上述2個颱風假)；約9天有落差，多數為極輕微(降雨量&lt;3mm，D欄記為晴)，其中6/10、6/12、7/15、7/16 這4天差異較明顯——Open-Meteo顯示有一定降雨量(9~41mm)，但D欄記錄為晴/陰無雨，建議這4天可再人工複查。<br>
-      <span style="color:#999;">＊Open-Meteo為網格化再分析資料，非駁二特區現場測站的逐時觀測值，短暫陣雨或局部降雨可能與現場人工記錄有落差，屬預期範圍內的資料來源差異。</span>
-    </div>
     <div class="scroll-table" style="margin-top:16px;">
-      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th><th>扭蛋數量</th><th>天氣</th></tr></thead><tbody></tbody></table>
+      <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>天氣</th></tr></thead><tbody></tbody></table>
     </div>
   </div>
 </section>
@@ -301,7 +295,6 @@ async function loadData(){
     // 透過 IMPORTRANGE 同步至本試算表「工作表4」分頁(欄位: A空白,B日期,C星期,D天氣,E當日營收,F POS營收,G扭蛋現金,H扭蛋數量)。
     // 未營業/尚無資料的日期來源端可能為文字「-」或錯誤值，一律以 num() 安全轉換為 0，不影響統計。
     GACHA = {};
-    WEATHER = {};
     if(wsGacha){
       const gachaRows = XLSX.utils.sheet_to_json(wsGacha, { header:1, defval:null, raw:true });
       gachaRows.forEach(r=>{
@@ -309,9 +302,26 @@ async function loadData(){
         const d = xlDate(r[1]);
         if(!d) return;
         GACHA[d] = num(r[7]);
-        WEATHER[d] = (r[3]!=null ? String(r[3]).trim() : '');
       });
     }
+
+    // 天氣資料：直接從 GitHub raw 讀取 weather_daily.csv(欄位:日期,天氣,降雨量mm,資料來源)，
+    // 資料來自 Open-Meteo 歷史氣象資料庫，每日排程自動查詢新增，不再依賴月報D欄人工記錄。
+    WEATHER = {};
+    try {
+      const wRes = await fetch('https://raw.githubusercontent.com/teb095510-dotcom/rabbit10th-dashboard/main/weather_daily.csv', { cache:'no-cache' });
+      if(wRes.ok){
+        const wText = await wRes.text();
+        const wLines = wText.split(/?
+/).filter(l=>l.trim()!=='');
+        for(let i=1;i<wLines.length;i++){
+          const cols = wLines[i].split(',');
+          const d = xlDate(cols[0]);
+          if(!d) continue;
+          WEATHER[d] = (cols[1]||'').trim();
+        }
+      }
+    } catch(e){ /* 天氣資料非關鍵路徑，載入失敗不影響其餘儀表板功能 */ }
 
     const maxDateStr = RECORDS.reduce((m,r)=> r.d>m? r.d : m, RECORDS[0].d);
     const maxDateMs = new Date(maxDateStr+'T00:00:00').getTime();
@@ -782,8 +792,7 @@ function initDashboard(){
       const growth = (prev && prev!==0)? (r.rev-prev)/prev : null;
       const info = getDayInfo(r.d);
       const cls = info.isClosed ? ' class="closed-row"' : '';
-      const statusLabel = info.isClosed ? (info.closedNote || '未營業') : '營業';
-      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${statusLabel}</td><td class="num">${fmtNum(r.gacha)}</td><td style="text-align:left">${r.weather||'-'}</td></tr>`;
+      return `<tr${cls}><td style="text-align:left">${info.combined}</td><td class="num">$${fmtNum(r.rev)}</td><td class="num">${fmtNum(r.qty)}</td><td class="num">${r.cnt}</td><td class="num">${growth===null?'-':fmtPct(growth)}</td><td style="text-align:left">${r.weather||'-'}</td></tr>`;
     }).join('');
 
     const totalGacha = rows.reduce((a,r)=>a+r.gacha,0);
