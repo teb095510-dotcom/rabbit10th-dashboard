@@ -177,11 +177,10 @@
       <table id="overviewStatsTable"><thead><tr><th>類別</th><th>天數</th><th>晴天</th><th>下雨</th><th>其他</th></tr></thead><tbody></tbody></table>
     </div>
     <div id="cwaCheckBox" style="margin-top:16px; padding:12px; background:#f7f7f7; border-radius:6px; font-size:13px; line-height:1.7;">
-      <strong>與氣象局公告核對說明</strong><br>
-      已核對2筆「休」（休館/停班停課）記錄，均與新聞報導的官方停班停課公告相符：<br>
-      ・6/26（豪雨特報休假）：因米克拉颱風外圍環流及鋒面影響，高雄市宣布全市停班停課，與D欄記錄相符。<br>
-      ・7/11（颱風假）：因巴威颱風影響，高雄市宣布全市停班停課，與D欄記錄相符。<br>
-      其餘一般晴天／雨天分類目前無法逐日對照中央氣象署官方觀測資料——氣象署開放資料平台（opendata.cwa.gov.tw）需申請API金鑰，CODiS歷史資料查詢系統為地圖式介面、無法有效批次查詢，故未取得金鑰前僅能以上述兩個有明確官方公告的日期進行交叉核對，其餘約45天的晴雨分類仍以D欄原始記錄為準。
+      <strong>與氣象資料核對說明</strong><br>
+      1) 已核對2筆「休」（休館/停班停課）記錄，均與新聞報導的官方停班停課公告相符：6/26（豪雨特報休假，米克拉颱風外圍環流及鋒面影響）、7/11（颱風假，巴威颱風影響），與D欄記錄相符。<br>
+      2) 中央氣象署開放資料平台需申請會員及API金鑰，未申請前無法逐日查詢官方測站觀測值；改以 Open-Meteo 歷史氣象資料庫（整合ECMWF/NOAA等多國氣象機構再分析資料，免申請免金鑰）對6/5～7/24全數50天進行逐日降雨量交叉核對。結果：約41天晴雨判定一致(含上述2個颱風假)；約9天有落差，多數為極輕微(降雨量&lt;3mm，D欄記為晴)，其中6/10、6/12、7/15、7/16 這4天差異較明顯——Open-Meteo顯示有一定降雨量(9~41mm)，但D欄記錄為晴/陰無雨，建議這4天可再人工複查。<br>
+      <span style="color:#999;">＊Open-Meteo為網格化再分析資料，非駁二特區現場測站的逐時觀測值，短暫陣雨或局部降雨可能與現場人工記錄有落差，屬預期範圍內的資料來源差異。</span>
     </div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>營業狀態</th><th>扭蛋數量</th><th>天氣</th></tr></thead><tbody></tbody></table>
