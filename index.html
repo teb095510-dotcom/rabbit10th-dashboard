@@ -312,8 +312,7 @@ async function loadData(){
       const wRes = await fetch('https://raw.githubusercontent.com/teb095510-dotcom/rabbit10th-dashboard/main/weather_daily.csv', { cache:'no-cache' });
       if(wRes.ok){
         const wText = await wRes.text();
-        const wLines = wText.split(/?
-/).filter(l=>l.trim()!=='');
+        const wLines = wText.split(/\r?\n/).filter(l=>l.trim()!=='');
         for(let i=1;i<wLines.length;i++){
           const cols = wLines[i].split(',');
           const d = xlDate(cols[0]);
