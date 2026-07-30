@@ -62,6 +62,9 @@
   .suggest-box div { padding:7px 12px; font-size:13px; cursor:pointer; }
   .suggest-box div:hover { background:var(--lightblue); }
   .suggest-box .empty { color:#999; cursor:default; }
+  .chip { display:inline-flex; align-items:center; gap:4px; background:var(--lightblue); color:var(--blue); padding:4px 8px; border-radius:12px; font-size:12px; }
+  .chip-x { cursor:pointer; font-weight:bold; padding:0 2px; }
+  .chip-x:hover { color:var(--warn); }
   .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; margin-left:6px; }
   .badge.new { background:#FCE4D6; color:#C00000; }
   .badge.old { background:#eee; color:#666; }
@@ -89,7 +92,7 @@
   <button data-tab="trend" class="active">銷售趨勢圖</button>
   <button data-tab="rank">銷售排行</button>
   <button data-tab="overview">每日總覽</button>
-  <button data-tab="vendor">廠商別分析</button>
+  <button data-tab="vendor">廠商報表</button>
   <button data-tab="returns">退貨分析</button>
   <button data-tab="quality">資料品質</button>
 </nav>
@@ -123,10 +126,17 @@
         <button data-mode="day">單日</button>
         <button data-mode="week">單週</button>
         <button data-mode="range" class="active">自訂區間</button>
+        <button data-mode="compare">多日對比</button>
       </div>
-      <div><label>起始日期</label><input type="date" id="startDate"></div>
-      <div><label>結束日期</label><input type="date" id="endDate"></div>
+      <div id="rangeDateCtrl" style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+        <div><label>起始日期</label><input type="date" id="startDate"></div>
+        <div><label>結束日期</label><input type="date" id="endDate"></div>
+      </div>
+      <div id="compareCtrl" style="display:none; gap:10px; flex-wrap:wrap; align-items:center;">
+        <div><label>選擇日期(最多6天)</label><input type="date" id="compareDateInput"> <button type="button" id="compareAddBtn">加入對比</button></div>
+      </div>
     </div>
+    <div id="compareChipsRow" style="display:none; flex-wrap:wrap; gap:6px; margin:-6px 0 12px;"></div>
     <div class="kpi-row" id="trendKpis"></div>
     <div class="kpi-row" id="trendKpisBreakdown" style="margin-top:-4px;"></div>
     <div class="legend-note">＊展場票券／Klook營收／扭蛋營收(估算)／新品營收／舊品營收，皆為選定期間內的完整加總，不受上方「選擇方式」篩選影響；票券已獨立列出，不重複計入新品/舊品營收；百分比為該項佔此5項分類總和之比例</div>
@@ -134,7 +144,7 @@
     <div class="legend-note" id="trendGachaNote" style="display:none;">＊「① 全部商品」模式下的銷售額已加計扭蛋營業額(扭蛋數量×200元估算)</div>
     <div class="chart-wrap"><canvas id="trendChartQty" class="chart-fixed" height="280"></canvas></div>
     <div class="chart-wrap" style="margin-top:20px;"><canvas id="trendChartRev" class="chart-fixed" height="280"></canvas></div>
-    <div class="legend-note" style="margin-top:20px;">現場購票人數：「十週年特展-現場票券」各票種銷售數量加總；Klook核銷人數：「Klook兌換票券」各票種銷售數量加總(早鳥/展期/套票優惠合計)。此圖不受上方「選擇方式」篩選影響，僅受起訖日期控制</div>
+    <div class="legend-note" style="margin-top:20px;">現場購票人數：「十週年特展-現場票券」各票種銷售數量加總；Klook核銷人數：「Klook兌換票券」各票種銷售數量加總(早鳥/展期/套票優惠合計)。人數換算：全票/學生票 1張=1人，雙人票 1張=2人，3人套票 1張=3人。此圖不受上方「選擇方式」篩選影響，僅受起訖日期控制</div>
     <div class="chart-wrap"><canvas id="trendChartTicket" class="chart-fixed" height="280"></canvas></div>
   </div>
 </section>
@@ -150,7 +160,15 @@
         <button data-rankmode="qty">銷售數量排行</button>
       </div>
     </div>
-    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」、商品名稱含「滿額贈」、以及特展扭蛋機抽獎／一番賞抽獎的品項，不列入商品排行；選擇特定廠商後，下方商品排行僅顯示該廠商的商品</div>
+    <div class="controls" style="margin-top:-4px;">
+      <div class="suggest-wrap">
+        <label>商品對比(最多10樣)</label>
+        <input type="text" id="rankProductInput" placeholder="輸入商品名稱搜尋並加入" autocomplete="off">
+        <div id="rankProductSuggest" class="suggest-box"></div>
+      </div>
+    </div>
+    <div id="rankProductChips" style="display:flex; flex-wrap:wrap; gap:6px; margin:-6px 0 12px;"></div>
+    <div class="legend-note">已排除商品總表(營運大表G欄)標記為「贈品」、商品名稱含「滿額贈」、以及特展扭蛋機抽獎／一番賞抽獎的品項，不列入商品排行；選擇特定廠商後，下方商品排行僅顯示該廠商的商品；選擇對比商品後，僅顯示所選商品(不受前30名限制)</div>
     <div id="rankBars"></div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="rankTable"><thead><tr><th>排名</th><th>商品名稱</th><th>銷售額</th><th>銷售數量</th></tr></thead><tbody></tbody></table>
@@ -174,7 +192,7 @@
     <h3 style="margin-top:20px;">天數與天氣統計(自2026-06-05起)</h3>
     <div class="legend-note">假日/平日依台灣行政院人事行政總處公告之國定假日與週末認定；天氣資料來源：Open-Meteo 歷史氣象資料庫(整合ECMWF/NOAA等多國氣象機構再分析資料)，依駁二特區座標逐日查詢降雨量換算晴/雨，每日自動更新。「其他」指尚無資料的日期</div>
     <div class="scroll-table">
-      <table id="overviewStatsTable"><thead><tr><th>類別</th><th>天數</th><th>晴天</th><th>下雨</th><th>其他</th></tr></thead><tbody></tbody></table>
+      <table id="overviewStatsTable"><thead><tr><th>類別</th><th>天數</th><th>晴天</th><th>晴天占比</th><th>下雨</th><th>下雨占比</th><th>其他</th></tr></thead><tbody></tbody></table>
     </div>
     <div class="scroll-table" style="margin-top:16px;">
       <table id="overviewTable"><thead><tr><th>日期</th><th>總銷售額</th><th>總銷售數量</th><th>上架商品數</th><th>較前一日成長率</th><th>天氣</th></tr></thead><tbody></tbody></table>
@@ -184,7 +202,7 @@
 
 <section id="vendor">
   <div class="card">
-    <div class="legend-note"><span class="swatch" style="background:#E8A33D;"></span>新品<span class="swatch" style="background:#B7B7B7;"></span>舊品 ｜ 依銷售額佔比。新舊品分類來源：商品總表 (A/B) 權威分類，若商品未列於總表則以「近14天內首次出現＝新品」推算</div>
+    <div class="legend-note"><span class="swatch" style="background:#E8A33D;"></span>新品<span class="swatch" style="background:#B7B7B7;"></span>舊品 ｜ 依銷售額佔比。新舊品分類來源：商品總表 (A/B) 權威分類，若商品未列於總表則以「近14天內首次出現＝新品」推算 ｜ 滑鼠移到銷售額長條可查看該廠商各商品的販售數量與金額明細</div>
     <div id="vendorBars"></div>
   </div>
 </section>
@@ -415,6 +433,15 @@ function initDashboard(){
 
   const allDates = Object.keys(CALENDAR).sort();
 
+  // 票券人數換算：全票/學生票 1張=1人；雙人票 1張=2人；3人套票(名稱含「3人」或「三人」) 1張=3人。
+  // 「每組(3張全票)」在資料匯入時已把數量展開成個別全票張數，故不會在此重複乘算。
+  function personsPerTicket(name){
+    if(!name) return 1;
+    if(name.includes('雙人')) return 2;
+    if(name.includes('3人') || name.includes('三人')) return 3;
+    return 1;
+  }
+
   function addDays(dateStr, n){
     const d = new Date(dateStr+'T00:00:00');
     d.setDate(d.getDate()+n);
@@ -580,10 +607,16 @@ function initDashboard(){
       const info = dayInfos[i];
       const x = xOf(i);
       ctx.fillStyle = info.isClosed ? '#6A4C93' : (info.isOff ? (info.label!=='週末' ? '#C00000' : '#777') : '#999');
-      ctx.fillText(info.combined, x-20, cssH-8);
+      let labelText = info.combined;
+      if(opts.weatherOf){
+        const w = opts.weatherOf(lb);
+        if(w==='晴') labelText += ' ☀';
+        else if(w && w.includes('雨')) labelText += ' ☂';
+      }
+      ctx.fillText(labelText, x-20, cssH-8);
     });
 
-    canvas._chartState = {labels, series, dayInfos, padL, padR, padT, padB, w, h, cssW, cssH, maxV, n, xOf};
+    canvas._chartState = {labels, series, dayInfos, padL, padR, padT, padB, w, h, cssW, cssH, maxV, n, xOf, opts};
 
     if(!canvas.dataset.hoverBound){
       canvas.dataset.hoverBound = '1';
@@ -598,6 +631,10 @@ function initDashboard(){
         const info = st.dayInfos[idx];
         let html = '<b>'+info.combined+'</b>';
         if(info.isClosed) html += '<br><span style="color:#D9D2E9">('+ (info.closedNote||'未營業') +')</span>';
+        if(st.opts && st.opts.weatherOf){
+          const w = st.opts.weatherOf(st.labels[idx]);
+          if(w) html += '<br>天氣：'+w;
+        }
         st.series.forEach(s=>{
           const v = s.data[idx];
           html += '<br>' + (s.label||'數值') + '：' + (v===null? '-' : fmtNum(v));
@@ -609,12 +646,39 @@ function initDashboard(){
   }
 
   let periodMode = 'range';
+  let compareDates = [];
+  const rangeDateCtrl = document.getElementById('rangeDateCtrl');
+  const compareCtrl = document.getElementById('compareCtrl');
+  const compareChipsRow = document.getElementById('compareChipsRow');
+  function renderCompareChips(){
+    compareChipsRow.style.display = compareDates.length ? 'flex' : 'none';
+    compareChipsRow.innerHTML = compareDates.slice().sort().map(d=>`<span class="chip" data-d="${d}">${d} <span class="chip-x" data-d="${d}">×</span></span>`).join('');
+  }
+  document.getElementById('compareAddBtn').addEventListener('click', ()=>{
+    const v = document.getElementById('compareDateInput').value;
+    if(!v) return;
+    if(compareDates.includes(v)) return;
+    if(compareDates.length>=6){ alert('最多只能選擇6個日期進行對比'); return; }
+    compareDates.push(v);
+    renderCompareChips();
+    renderTrend();
+  });
+  compareChipsRow.addEventListener('click', (e)=>{
+    const d = e.target.getAttribute('data-d');
+    if(!d) return;
+    compareDates = compareDates.filter(x=>x!==d);
+    renderCompareChips();
+    renderTrend();
+  });
   document.querySelectorAll('#periodBtns button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('#periodBtns button').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       periodMode = btn.dataset.mode;
-      syncTrendDates();
+      rangeDateCtrl.style.display = periodMode==='compare' ? 'none' : 'flex';
+      compareCtrl.style.display = periodMode==='compare' ? 'flex' : 'none';
+      compareChipsRow.style.display = (periodMode==='compare' && compareDates.length) ? 'flex' : 'none';
+      if(periodMode!=='compare') syncTrendDates();
       renderTrend();
     });
   });
@@ -631,13 +695,19 @@ function initDashboard(){
   document.getElementById('endDate').addEventListener('change', renderTrend);
 
   function renderTrend(){
-    const start = document.getElementById('startDate').value;
-    const end = document.getElementById('endDate').value;
-    const dates = allDates.filter(d=> d>=start && d<=end);
+    let dates;
+    if(periodMode==='compare'){
+      dates = compareDates.slice().sort();
+    } else {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      dates = allDates.filter(d=> d>=start && d<=end);
+    }
+    const dateSet = new Set(dates);
     const qtyByDate = {}, revByDate = {};
     dates.forEach(d=>{ qtyByDate[d]=0; revByDate[d]=0; });
     RECORDS.forEach(r=>{
-      if(r.d<start || r.d>end) return;
+      if(!dateSet.has(r.d)) return;
       if(!recordMatches(r)) return;
       qtyByDate[r.d] = (qtyByDate[r.d]||0) + r.n;
       revByDate[r.d] = (revByDate[r.d]||0) + r.rev;
@@ -658,10 +728,10 @@ function initDashboard(){
     const onsiteByDate = {}, klookByDate = {};
     dates.forEach(d=>{ onsiteByDate[d]=0; klookByDate[d]=0; });
     RECORDS.forEach(r=>{
-      if(r.d<start || r.d>end) return;
+      if(!dateSet.has(r.d)) return;
       if(r.v!==TICKET_VENDOR) return;
-      if(r.p.indexOf('十週年特展-現場票券')===0) onsiteByDate[r.d] = (onsiteByDate[r.d]||0) + r.n;
-      else if(r.p.indexOf('Klook兌換票券')===0) klookByDate[r.d] = (klookByDate[r.d]||0) + r.n;
+      if(r.p.indexOf('十週年特展-現場票券')===0) onsiteByDate[r.d] = (onsiteByDate[r.d]||0) + r.n*personsPerTicket(r.p);
+      else if(r.p.indexOf('Klook兌換票券')===0) klookByDate[r.d] = (klookByDate[r.d]||0) + r.n*personsPerTicket(r.p);
     });
     const onsiteData = dates.map(d=>onsiteByDate[d]);
     const klookData = dates.map(d=>klookByDate[d]);
@@ -677,7 +747,7 @@ function initDashboard(){
     // 票券已獨立列出，不重複計入新品/舊品營收，避免與展場票券/Klook營收重複計算。
     let ticketOnsiteRev = 0, ticketKlookRev = 0, newRev = 0, oldRev = 0;
     RECORDS.forEach(r=>{
-      if(r.d<start || r.d>end) return;
+      if(!dateSet.has(r.d)) return;
       if(r.v===TICKET_VENDOR){
         if(r.p.indexOf('十週年特展-現場票券')===0) ticketOnsiteRev += r.rev;
         else if(r.p.indexOf('Klook兌換票券')===0) ticketKlookRev += r.rev;
@@ -723,6 +793,43 @@ function initDashboard(){
   rankVendorSelect.innerHTML = '<option value="">全部廠商</option>' + vendors.filter(v=>v!==TICKET_VENDOR).map(v=>`<option value="${v}">${v}</option>`).join('');
   rankVendorSelect.addEventListener('change', renderRank);
   const EXTRA_EXCLUDE_FROM_RANK = ['特展扭蛋機抽獎', '一番賞抽獎'];
+
+  // 商品對比：最多選10樣商品，選定後排行只顯示這些商品(不受前30名限制)
+  let compareProducts = [];
+  const rankProductInput = document.getElementById('rankProductInput');
+  const rankProductSuggest = document.getElementById('rankProductSuggest');
+  const rankProductChips = document.getElementById('rankProductChips');
+  function renderRankProductChips(){
+    rankProductChips.innerHTML = compareProducts.map(p=>`<span class="chip" data-p="${p.replace(/"/g,'&quot;')}">${p} <span class="chip-x" data-p="${p.replace(/"/g,'&quot;')}">×</span></span>`).join('');
+  }
+  rankProductInput.addEventListener('input', ()=>{
+    const kw = rankProductInput.value.trim();
+    if(!kw){ rankProductSuggest.style.display='none'; return; }
+    const matches = products.filter(p=>p.includes(kw) && !compareProducts.includes(p)).slice(0,10);
+    rankProductSuggest.innerHTML = matches.length ? matches.map(p=>`<div data-p="${p.replace(/"/g,'&quot;')}">${p}</div>`).join('') : '<div class="empty">沒有符合的商品</div>';
+    rankProductSuggest.style.display = 'block';
+  });
+  rankProductSuggest.addEventListener('click', (e)=>{
+    const p = e.target.getAttribute('data-p');
+    if(!p) return;
+    if(compareProducts.length>=10){ alert('最多只能選擇10樣商品進行對比'); rankProductSuggest.style.display='none'; return; }
+    if(!compareProducts.includes(p)) compareProducts.push(p);
+    rankProductInput.value = '';
+    rankProductSuggest.style.display = 'none';
+    renderRankProductChips();
+    renderRank();
+  });
+  rankProductChips.addEventListener('click', (e)=>{
+    const p = e.target.getAttribute('data-p');
+    if(!p) return;
+    compareProducts = compareProducts.filter(x=>x!==p);
+    renderRankProductChips();
+    renderRank();
+  });
+  document.addEventListener('click', (e)=>{
+    if(!rankProductSuggest.contains(e.target) && e.target!==rankProductInput) rankProductSuggest.style.display='none';
+  });
+
   function renderRank(){
     const start = document.getElementById('rankStart').value;
     const end = document.getElementById('rankEnd').value;
@@ -732,22 +839,28 @@ function initDashboard(){
     RECORDS.forEach(r=>{
       if(r.d<start || r.d>end) return;
       if(selVendor && r.v!==selVendor) return; // 只顯示選定廠商的商品
-      if(r.no==='贈品') return; // 商品總表(營運大表)G欄標記為「贈品」的品項，不列入商品排行
-      if(r.p.includes('滿額贈')) return; // 商品名稱含「滿額贈」的滿額贈品，不列入商品排行(即使未列於商品總表分類中)
-      if(EXTRA_EXCLUDE_FROM_RANK.includes(r.p)) return; // 特展扭蛋機抽獎、一番賞抽獎不列入銷售排行(不顯示於任何排行區塊)
       if(r.v===TICKET_VENDOR){
         if(!ticketAgg[r.p]) ticketAgg[r.p] = {qty:0, rev:0};
         ticketAgg[r.p].qty += r.n; ticketAgg[r.p].rev += r.rev;
         return;
+      }
+      if(compareProducts.length>0){
+        if(!compareProducts.includes(r.p)) return; // 對比模式：只累計選定的商品
+      } else {
+        if(r.no==='贈品') return; // 商品總表(營運大表)G欄標記為「贈品」的品項，不列入商品排行
+        if(r.p.includes('滿額贈')) return; // 商品名稱含「滿額贈」的滿額贈品，不列入商品排行(即使未列於商品總表分類中)
+        if(EXTRA_EXCLUDE_FROM_RANK.includes(r.p)) return; // 特展扭蛋機抽獎、一番賞抽獎不列入銷售排行(不顯示於任何排行區塊)
       }
       if(!agg[r.p]) agg[r.p] = {qty:0, rev:0};
       agg[r.p].qty += r.n; agg[r.p].rev += r.rev;
     });
     const key = rankMode==='qty' ? 'qty' : 'rev';
 
-    const arr = Object.entries(agg).map(([p,v])=>({p,...v})).sort((a,b)=>b[key]-a[key]).slice(0,30);
+    let arr = Object.entries(agg).map(([p,v])=>({p,...v})).sort((a,b)=>b[key]-a[key]);
+    if(compareProducts.length===0) arr = arr.slice(0,30);
     const maxVal = arr.length? arr[0][key] : 1;
-    document.getElementById('rankBars').innerHTML = arr.slice(0,10).map(x=>`
+    const barsList = compareProducts.length>0 ? arr : arr.slice(0,10);
+    document.getElementById('rankBars').innerHTML = barsList.map(x=>`
       <div class="bar-row"><div class="name" title="${x.p}">${x.p}</div>
       <div class="track"><div class="bar" style="width:${Math.max(2,x[key]/maxVal*100)}%"></div></div>
       <div class="val">${key==='rev'?'$':''}${fmtNum(x[key])}</div></div>`).join('');
@@ -784,7 +897,7 @@ function initDashboard(){
       if(r.n>0) byDate[r.d].products.add(r.p);
     });
     const rows = overviewDates.map(d=>({d, rev:byDate[d].rev, qty:byDate[d].qty, cnt:byDate[d].products.size, gacha:GACHA[d]||0, weather:WEATHER[d]||''}));
-    drawLineChart(document.getElementById('overviewChart'), rows.map(r=>r.d), [{data:rows.map(r=>r.rev), color:'#2F5496', label:'銷售額'}], {title:'每日銷售額趨勢'});
+    drawLineChart(document.getElementById('overviewChart'), rows.map(r=>r.d), [{data:rows.map(r=>r.rev), color:'#2F5496', label:'銷售額'}], {title:'每日銷售額趨勢', weatherOf:(d)=>WEATHER[d]});
     const tbody = document.querySelector('#overviewTable tbody');
     tbody.innerHTML = rows.map((r,i)=>{
       const prev = i>0? rows[i-1].rev : null;
@@ -819,20 +932,26 @@ function initDashboard(){
       雨: stats.假日.雨 + stats.平日.雨,
       其他: stats.假日.其他 + stats.平日.其他,
     };
+    const pctOf = (n,d)=> d>0 ? fmtPct(n/d) : '-';
     document.querySelector('#overviewStatsTable tbody').innerHTML = `
-      <tr><td style="text-align:left">假日</td><td class="num">${stats.假日.days}</td><td class="num">${stats.假日.晴}</td><td class="num">${stats.假日.雨}</td><td class="num">${stats.假日.其他}</td></tr>
-      <tr><td style="text-align:left">平日</td><td class="num">${stats.平日.days}</td><td class="num">${stats.平日.晴}</td><td class="num">${stats.平日.雨}</td><td class="num">${stats.平日.其他}</td></tr>
-      <tr style="font-weight:bold;"><td style="text-align:left">合計</td><td class="num">${total.days}</td><td class="num">${total.晴}</td><td class="num">${total.雨}</td><td class="num">${total.其他}</td></tr>
+      <tr><td style="text-align:left">假日</td><td class="num">${stats.假日.days}</td><td class="num">${stats.假日.晴}</td><td class="num">${pctOf(stats.假日.晴,stats.假日.days)}</td><td class="num">${stats.假日.雨}</td><td class="num">${pctOf(stats.假日.雨,stats.假日.days)}</td><td class="num">${stats.假日.其他}</td></tr>
+      <tr><td style="text-align:left">平日</td><td class="num">${stats.平日.days}</td><td class="num">${stats.平日.晴}</td><td class="num">${pctOf(stats.平日.晴,stats.平日.days)}</td><td class="num">${stats.平日.雨}</td><td class="num">${pctOf(stats.平日.雨,stats.平日.days)}</td><td class="num">${stats.平日.其他}</td></tr>
+      <tr style="font-weight:bold;"><td style="text-align:left">合計</td><td class="num">${total.days}</td><td class="num">${total.晴}</td><td class="num">${pctOf(total.晴,total.days)}</td><td class="num">${total.雨}</td><td class="num">${pctOf(total.雨,total.days)}</td><td class="num">${total.其他}</td></tr>
     `;
   }
   renderOverview();
 
   function renderVendor(){
     const agg = {};
+    const vendorProductAgg = {}; // 廠商 -> {商品: {qty,rev}}，供hover明細使用
     RECORDS.forEach(r=>{
       if(!agg[r.v]) agg[r.v]={rev:0,qty:0,newRev:0,oldRev:0};
       agg[r.v].rev+=r.rev; agg[r.v].qty+=r.n;
       if(r.no==='新品') agg[r.v].newRev+=r.rev; else if(r.no==='舊品') agg[r.v].oldRev+=r.rev;
+      if(!vendorProductAgg[r.v]) vendorProductAgg[r.v] = {};
+      if(!vendorProductAgg[r.v][r.p]) vendorProductAgg[r.v][r.p] = {qty:0, rev:0};
+      vendorProductAgg[r.v][r.p].qty += r.n;
+      vendorProductAgg[r.v][r.p].rev += r.rev;
     });
     const arr = Object.entries(agg).map(([v,x])=>({v,...x})).sort((a,b)=>b.rev-a.rev);
     const total = arr.reduce((a,b)=>a+b.rev,0);
@@ -841,14 +960,31 @@ function initDashboard(){
       const splitTotal = x.newRev + x.oldRev;
       const newPct = splitTotal? x.newRev/splitTotal*100 : 0;
       const oldPct = splitTotal? x.oldRev/splitTotal*100 : 0;
+      const vAttr = x.v.replace(/"/g,'&quot;');
       return `
-      <div class="bar-row"><div class="name" title="${x.v}">${x.v}</div>
-      <div class="track"><div class="bar" style="width:${Math.max(2,x.rev/maxRev*100)}%"></div></div>
+      <div class="bar-row" data-vendor="${vAttr}"><div class="name" title="${x.v}">${x.v}</div>
+      <div class="track" data-vendor="${vAttr}"><div class="bar" style="width:${Math.max(2,x.rev/maxRev*100)}%"></div></div>
       <div class="val">$${fmtNum(x.rev)} (${fmtPct(x.rev/total)})</div></div>
       <div class="vendor-split-row"><div class="name"></div>
       <div class="split-track">${newPct>0?`<div class="split-new" style="width:${newPct}%"></div>`:''}${oldPct>0?`<div class="split-old" style="width:${oldPct}%"></div>`:''}</div>
       <div class="split-val">新品 ${fmtPct(newPct/100)}／舊品 ${fmtPct(oldPct/100)}</div></div>`;
     }).join('');
+
+    // 滑鼠移到銷售額長條(或整列)時，顯示該廠商各商品的販售數量與金額明細(依銷售額排序，最多10項)
+    document.querySelectorAll('#vendorBars .bar-row, #vendorBars .track').forEach(el=>{
+      el.addEventListener('mousemove', (e)=>{
+        const vname = el.getAttribute('data-vendor');
+        if(!vname) return;
+        const prods = vendorProductAgg[vname] || {};
+        const entries = Object.entries(prods);
+        const parr = entries.map(([p,x])=>({p,...x})).sort((a,b)=>b.rev-a.rev).slice(0,10);
+        let html = '<b>'+vname+'</b>';
+        parr.forEach(p=>{ html += '<br>'+p.p+'：'+fmtNum(p.qty)+'件 / $'+fmtNum(p.rev); });
+        if(entries.length>10) html += '<br>...等共'+entries.length+'項商品';
+        showTooltip(e.clientX, e.clientY, html);
+      });
+      el.addEventListener('mouseleave', hideTooltip);
+    });
   }
   renderVendor();
 
