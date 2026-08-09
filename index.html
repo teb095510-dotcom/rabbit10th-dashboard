@@ -400,7 +400,7 @@ function getDayInfo(dateStr){
 }
 
 function initDashboard(){
-  const TICKET_VENDOR = '(無廠商-門票/現場服務類)';
+  const TICKET_VENDORS = new Set(['(無廠商-門票/現場服務類)', '謙謙展覽']); function isTicketRow(r){ return r.p.indexOf('十週年特展-現場票券')===0 || r.p.indexOf('Klook兌換票券')===0; }
   // 所有日期區間篩選器的預設值：起始固定為展覽開放日 2026-06-05，結束為使用者開啟頁面當下的實際日期(非資料最後更新日)
   const DEFAULT_RANGE_START = '2026-06-05';
   function todayStr(){
@@ -729,7 +729,7 @@ function initDashboard(){
     dates.forEach(d=>{ onsiteByDate[d]=0; klookByDate[d]=0; });
     RECORDS.forEach(r=>{
       if(!dateSet.has(r.d)) return;
-      if(r.v!==TICKET_VENDOR) return;
+      if(!isTicketRow(r)) return;
       if(r.p.indexOf('十週年特展-現場票券')===0) onsiteByDate[r.d] = (onsiteByDate[r.d]||0) + r.n*personsPerTicket(r.p);
       else if(r.p.indexOf('Klook兌換票券')===0) klookByDate[r.d] = (klookByDate[r.d]||0) + r.n*personsPerTicket(r.p);
     });
@@ -748,7 +748,7 @@ function initDashboard(){
     let ticketOnsiteRev = 0, ticketKlookRev = 0, newRev = 0, oldRev = 0;
     RECORDS.forEach(r=>{
       if(!dateSet.has(r.d)) return;
-      if(r.v===TICKET_VENDOR){
+      if(isTicketRow(r)){
         if(r.p.indexOf('十週年特展-現場票券')===0) ticketOnsiteRev += r.rev;
         else if(r.p.indexOf('Klook兌換票券')===0) ticketKlookRev += r.rev;
         return;
@@ -790,7 +790,7 @@ function initDashboard(){
   document.getElementById('rankStart').addEventListener('change', renderRank);
   document.getElementById('rankEnd').addEventListener('change', renderRank);
   const rankVendorSelect = document.getElementById('rankVendorSelect');
-  rankVendorSelect.innerHTML = '<option value="">全部廠商</option>' + vendors.filter(v=>v!==TICKET_VENDOR).map(v=>`<option value="${v}">${v}</option>`).join('');
+  rankVendorSelect.innerHTML = '<option value="">全部廠商</option>' + vendors.filter(v=>!TICKET_VENDORS.has(v)).map(v=>`<option value="${v}">${v}</option>`).join('');
   rankVendorSelect.addEventListener('change', renderRank);
   const EXTRA_EXCLUDE_FROM_RANK = ['特展扭蛋機抽獎', '一番賞抽獎'];
 
@@ -839,7 +839,7 @@ function initDashboard(){
     RECORDS.forEach(r=>{
       if(r.d<start || r.d>end) return;
       if(selVendor && r.v!==selVendor) return; // 只顯示選定廠商的商品
-      if(r.v===TICKET_VENDOR){
+      if(isTicketRow(r)){
         if(!ticketAgg[r.p]) ticketAgg[r.p] = {qty:0, rev:0};
         ticketAgg[r.p].qty += r.n; ticketAgg[r.p].rev += r.rev;
         return;
